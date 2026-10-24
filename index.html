@@ -210,6 +210,8 @@ body.compact .tst{font-size:13px;padding:6px 10px}
    <div class="grp"><div class="lbl">Specialità</div><div class="seg" id="segGame"></div></div>
    <div class="grp" id="grpGorVar"><div class="lbl">Variante della goriziana</div><div class="seg" id="segGorVar"></div></div>
    <div class="grp"><div class="lbl">Punti per vincere</div><div class="seg" id="segTarget"></div></div>
+   <div class="grp"><div class="lbl">Set (come nei tornei: la goriziana si gioca 2 set su 3 ai 400)</div><div class="seg" id="segSets">
+    <button class="btn" data-v="1">Partita secca</button><button class="btn" data-v="2">2 set su 3</button><button class="btn" data-v="3">3 set su 5</button></div></div>
    <div class="grp"><div class="lbl">Nomi</div><div class="names"><input id="nm0" maxlength="16"><input id="nm1" maxlength="16"></div></div>
    <div class="grp" id="grpDiff"><div class="lbl">Bravura del computer</div><div class="seg" id="segDiff">
     <button class="btn" data-v="0">Principiante</button><button class="btn" data-v="1">Dilettante</button><button class="btn" data-v="2">Esperto</button><button class="btn" data-v="3">Campione</button></div></div>
@@ -254,8 +256,8 @@ const SPOTCOL={w:'#c0392b',y:'#6b4a00',r:'#ffe0d8',R:'#ffd9d0',W:'#7a6a50',P:'#e
 const ck=id=>id.length>1?id[0]:id;   // chiave colore di una palla
 // specialità: cue = stecca con birilli, carom = carambola senza birilli, bocce = boccette a mano
 const GAMES={
- italiana:{name:'All\'italiana',sub:'5 birilli',kind:'cue',targets:[25,50,60]},
- goriziana:{name:'Goriziana',sub:'9 birilli',kind:'cue',targets:[100,200,300]},
+ italiana:{name:'All\'italiana',sub:'5 birilli',kind:'cue',targets:[25,50,60,100,120]},
+ goriziana:{name:'Goriziana',sub:'9 birilli',kind:'cue',targets:[100,200,300,400]},
  tresponde:{name:'Tre sponde',sub:'carambola',kind:'carom',need:3,targets:[10,15,25]},
  libera:{name:'Carambola libera',sub:'senza birilli',kind:'carom',need:0,targets:[20,30,50]},
  boccette:{name:'Boccette',sub:'a mano',kind:'bocce',targets:[50,80,100]}};
@@ -323,7 +325,7 @@ const CTXS={
 };
 
 // ---------- impostazioni ----------
-const DEF={mode:'cpu',game:'italiana',gorVar:'classica',target:{italiana:50,goriziana:200,tresponde:15,libera:30,boccette:80},names:['Giocatore 1','Giocatore 2'],diff:1,table:'classico',ctx:'circolo',temp:30,guide:0,sound:1,slowmo:1,miniLv:0};
+const DEF={mode:'cpu',game:'italiana',gorVar:'classica',target:{italiana:50,goriziana:200,tresponde:15,libera:30,boccette:80},names:['Giocatore 1','Giocatore 2'],diff:1,table:'classico',ctx:'circolo',temp:30,guide:0,sound:1,slowmo:1,miniLv:0,sets:1};
 let cfg;try{cfg=Object.assign({},DEF,JSON.parse(localStorage.getItem('sd-cfg')||'{}'))}catch(e){cfg=Object.assign({},DEF)}
 cfg.target=Object.assign({},DEF.target,cfg.target||{});
 if(!cfg.gv){cfg.guide=0;cfg.gv=1}   // il colpo guidato parte spento: si attiva solo se scelto
@@ -611,6 +613,7 @@ const kindOf=g=>GAMES[g]?GAMES[g].kind:'mini';
 function newMatch(o){
  const T=TABLES[o.table];
  G={mode:o.mode,game:o.game,vr:o.game==='goriziana'?(o.vr||'classica'):null,target:o.target,table:o.table,ctx:o.ctx,T,players:o.players,starter:o.starter||0,story:o.story||null,
+  sets:o.story?1:(o.sets||1),won:o.won||[0,0],setNo:o.setNo||1,
   S:mkState(T.L,T.W,params(cfg.temp)),cur:0,phase:'idle',pred:null,ai:null,fast:false,lastPow:0.45,shot:null,pw:0,bat:null,hand:false};
  const S=G.S,K=kindOf(G.game);S.pins=makePins(G.game);pinBox(S);
  const st=G.starter;G.cur=st;
@@ -764,7 +767,11 @@ function endMatch(){
    return card('Partita finita',`<div class="big">💔</div>${sc}<p>${G.players[1].name} ha vinto e hai finito le vite. La storia ricomincia dal Bar Sport di Borgo Vecchio, con ${LIVES} vite nuove.</p>`,[{t:'Ricomincia ▸',cls:'pri',fn:storyMatch},{t:'Menu',fn:showMenu}])}
   saveStory();
   return card('Sconfitta',`<div class="big">😤</div>${sc}<p>${G.players[1].name} ha vinto questa volta. Hai perso una vita: te ne rimangono <b>${story.lives}</b> ${hearts()}</p>`,[{t:'Riprova',cls:'pri',fn:storyMatch},{t:'Menu',fn:showMenu}])}
- card(`Vince ${W.name}!`,`<div class="big">🏆</div>${sc}`,[{t:'Rivincita',cls:'pri',fn:()=>{const pl=G.players.map(p=>({...p,score:0}));newMatch({mode:G.mode,game:G.game,vr:G.vr,target:G.target,table:G.table,ctx:G.ctx,players:pl,starter:1-G.starter})}},{t:'Menu',fn:showMenu}]);
+ const again=(won,setNo,starter)=>{const pl=G.players.map(p=>({...p,score:0}));newMatch({mode:G.mode,game:G.game,vr:G.vr,target:G.target,table:G.table,ctx:G.ctx,players:pl,starter,sets:G.sets,won,setNo})};
+ if(G.sets>1){const won=G.won.slice();won[w]++;const ws=`<p class="sub" style="text-align:center">Set: <b>${p0.name} ${won[0]} – ${won[1]} ${p1.name}</b> · ${G.sets} set su ${2*G.sets-1}</p>`;
+  if(won[w]<G.sets)return card(`Set ${G.setNo} a ${W.name}`,`<div class="big">🎱</div>${sc}${ws}`,[{t:'Prossimo set ▸',cls:'pri',fn:()=>again(won,G.setNo+1,1-G.starter)},{t:'Menu',fn:showMenu}]);
+  return card(`Vince ${W.name}!`,`<div class="big">🏆</div>${sc}${ws}`,[{t:'Rivincita',cls:'pri',fn:()=>again([0,0],1,1-G.starter)},{t:'Menu',fn:showMenu}])}
+ card(`Vince ${W.name}!`,`<div class="big">🏆</div>${sc}`,[{t:'Rivincita',cls:'pri',fn:()=>again([0,0],1,1-G.starter)},{t:'Menu',fn:showMenu}]);
 }
 function miniJudge(){const M=G.mini,r=M.def.judge(G.S.ev,G.S,M);M.used++;
  if(r.ok){sfx.win();return setTimeout(()=>miniEnd(true,r.msg),500)}
@@ -988,6 +995,7 @@ function drawCue(c,b,sh,pull){const el=sh.el*Math.PI/180,u=[Math.cos(sh.ang),Mat
  seg(0.03,0.75*k,0.0064*mw,0.0095*mw,'#e3c48e');seg(0.75*k,0.8*k,0.0095*mw,0.0098*mw,'#2a1408');
  seg(0.8*k,1.2*k,0.0098*mw,0.0125*mw,'#6b2d14');seg(1.2*k,1.25*k,0.0125*mw,0.0128*mw,'#d9b46a');seg(1.25*k,len,0.0128*mw,0.0145*mw,'#1e0f08')}
 function draw(){
+ if(!stat.width||!stat.height)return;   // finestra ancora senza dimensioni
  const cv0=cam();
  if(cv0.z>1){const d=view.dpr;ctx.setTransform(cv0.z,0,0,cv0.z,cv0.P[0]*d*(1-cv0.z),cv0.P[1]*d*(1-cv0.z))}else ctx.setTransform(1,0,0,1,0,0);
  ctx.drawImage(stat,0,0);
@@ -1117,7 +1125,7 @@ function hud(){if(!G)return;const pc=[$('#pc0'),$('#pc1')];
   e.querySelector('.tg').textContent=G.hand&&p.left!=null?'●'.repeat(p.left)+'○'.repeat(4-p.left):'';e.querySelector('.sc').textContent=p.score});
  const gn=GAMES[G.game].name+(G.vr&&G.vr!=='classica'?` (${GORVAR[G.vr]})`:'')+(G.bb?` · giocata ${G.bb.giocata}`:'');
  const ph=G.hand&&G.phase==='aim'?'Direzione del lancio':G.hand&&G.phase==='place'?'Punto di lancio':PHASE_TXT[G.phase]||'';
- $('#hmid').innerHTML=`<b>${gn}</b>${G.mode==='story'?' · '+hearts():''} · ai ${G.target} punti · ${TABLES[G.table].name} · ${cfg.temp} °C<br>${ph}`}
+ $('#hmid').innerHTML=`<b>${gn}</b>${G.mode==='story'?' · '+hearts():''} · ai ${G.target} punti${G.sets>1?` · set ${G.setNo} (${G.won[0]}–${G.won[1]})`:''} · ${TABLES[G.table].name} · ${cfg.temp} °C<br>${ph}`}
 const PHASE_TXT={pallino:'Posiziona il pallino',place:'Palla in mano',aim:'Direzione del tiro · tocca la pallina in basso per l\'effetto',power:'Ferma la barra della potenza',roll:'',cpu:'Il computer pensa',cpuaim:'Il computer tira'};
 function toast(t,cls){if(!t)return;const e=document.createElement('div');e.className='tst '+(cls||'');e.textContent=t;const box=$('#toast');box.appendChild(e);while(box.children.length>3)box.firstChild.remove();setTimeout(()=>e.remove(),2800)}
 function card(title,html,btns,wide){$('#msgT').textContent=title;$('#msgB').innerHTML=html;const bx=$('#msgBtns');bx.innerHTML='';
@@ -1138,6 +1146,7 @@ function renderMenu(){
  seg('#segGorVar',cfg.gorVar,v=>{cfg.gorVar=v;saveCfg()});
  $('#segTarget').innerHTML=GAMES[cfg.game].targets.map(t=>`<button class="btn" data-v="${t}">${t}</button>`).join('');
  seg('#segTarget',cfg.target[cfg.game],v=>{cfg.target[cfg.game]=+v;saveCfg()});
+ seg('#segSets',cfg.sets,v=>{cfg.sets=+v;saveCfg()});
  seg('#segDiff',cfg.diff,v=>{cfg.diff=+v;saveCfg()});$('#grpDiff').hidden=menuMode!=='cpu';
  $('#nm0').value=cfg.names[0];$('#nm1').value=cfg.names[1];$('#nm1').hidden=menuMode!=='2p';
  $('#tabTables').innerHTML=Object.entries(TABLES).map(([k,t])=>`<button class="btn tcard${k===cfg.table?' sel':''}" data-k="${k}"><span class="sw" style="background:${t.cloth};border-color:${t.wood2}"></span><span>${t.name}<small>${t.sub}</small></span></button>`).join('');
@@ -1175,7 +1184,7 @@ $('#btnPlay').onclick=()=>{ac();
  if(menuMode==='story'){if(story.stage==='mini')storyMini();else storyMatch();return}
  if(menuMode==='mini')return;
  const pl=[{name:cfg.names[0],ball:'w',score:0,cpu:null},menuMode==='cpu'?{name:['Principiante','Dilettante','Esperto','Campione'][cfg.diff]+' CPU',ball:'y',score:0,cpu:cfg.diff}:{name:cfg.names[1],ball:'y',score:0,cpu:null}];
- newMatch({mode:menuMode,game:cfg.game,vr:cfg.gorVar,target:cfg.target[cfg.game]||GAMES[cfg.game].targets[1],table:cfg.table,ctx:cfg.ctx,players:pl,starter:0})};
+ newMatch({mode:menuMode,game:cfg.game,vr:cfg.gorVar,target:cfg.target[cfg.game]||GAMES[cfg.game].targets[1],table:cfg.table,ctx:cfg.ctx,players:pl,starter:0,sets:cfg.sets})};
 $('#btnRules').onclick=()=>card('Regole e comandi',`<div class="rules">
  <h3>Come si tira</h3><ul><li><b>Effetto (facoltativo)</b>: tocca la pallina in basso a sinistra per aprire il pannello laterale; tocca la palla nel punto dove vuoi colpirla (alto = seguito, basso = rinculo, lati = effetto) e scegli l'inclinazione della stecca. Oltre 35° la palla curva (massé). Tastiera: I J K L e W/S, E apre e chiude.</li>
  <li><b>Direzione</b>: trascina sul tavolo o usa ↺ ↻ (tieni premuto per accelerare). Tastiera: frecce, Maiusc per la regolazione fine.</li>
