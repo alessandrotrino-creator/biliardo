@@ -56,7 +56,9 @@ Dentro, in ordine:
 
 - `[hidden]{display:none!important}` è nello stile: nascondere gli elementi con `el.hidden`.
 - **Layout responsive**:
-  - telefono in orizzontale (`orientation:landscape` e `max-height:520px`): HUD e barra diventano colonne laterali; il pannello effetto diventa una striscia bassa;
+  - **compatto** (classe `body.compact`, decisa da `applyCompact()` a ogni ridimensionamento): orizzontale con altezza ≤ 520 px, oppure touch (`pointer:coarse`, quindi telefoni e tablet) con altezza ≤ 900 px, oppure a schermo intero sotto i 900 px. HUD e comandi diventano colonne laterali strette (rispettano le `safe-area` dei telefoni con notch), il pannello effetto diventa una striscia bassa, la **barra della potenza diventa verticale e alta** (`powUI` gestisce i due orientamenti). La LIM (altezza 1080) resta fuori;
+  - **schermo intero**: pulsante ⛶ nell'HUD (`toggleFs`: Fullscreen API + blocco in orizzontale dove supportato). Su iPhone l'API non c'è: una finestra spiega «Condividi → Aggiungi alla schermata Home» (meta `apple-mobile-web-app-capable`);
+  - durante la potenza c'è anche un **anello colorato attorno alla palla** sul tavolo; in verticale la barra occupa tutta la larghezza;
   - verticale (`orientation:portrait`): il pannello effetto va in basso; telefono (`max-width:620px`): HUD su due righe;
   - LIM (`min-width:1600px` e `min-height:900px`): controlli ingranditi con `zoom:1.3`.
 - Quando si apre o chiude il pannello effetto bisogna richiamare `layout()` (lo fa già `setPhase`), altrimenti il tavolo resta coperto.

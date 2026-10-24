@@ -1,5 +1,6 @@
 <!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>*{box-sizing:border-box}html,body{margin:0;height:100%}</style>
 <title>Stecca d'Oro</title>
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#120f0c">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Figtree:wght@400;600;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
@@ -33,9 +34,10 @@ button{font-family:inherit}
 .minib{width:48px;height:48px;padding:0;border-radius:50%;border:1px solid var(--line);background:#0003;cursor:pointer;flex:none}
 .minib.sel{border-color:var(--gold);box-shadow:0 0 0 2px #e7b54a55}
 .minib canvas{width:44px;height:44px;display:block;margin:auto}
-.pbar{position:relative;width:min(420px,52vw);height:30px;border-radius:15px;background:linear-gradient(90deg,#2f8a4a,#e7c34a 60%,#d8443a);overflow:hidden;border:1px solid #0008}
-.pmask{position:absolute;top:0;bottom:0;right:0;background:#100d0aee}
-.plast{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff8;left:50%}
+.hbtns{display:flex;gap:6px;flex:none}
+.pbar{position:relative;width:min(420px,52vw);height:36px;border-radius:15px;background:linear-gradient(90deg,#2f8a4a,#e7c34a 60%,#d8443a);overflow:hidden;border:1px solid #0008}
+.pmask{position:absolute;background:#100d0aee}
+.plast{position:absolute;background:#fffc}
 .pbar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:15px;text-shadow:0 1px 3px #000}
 /* pannello effetto */
 /* pannello effetto: a lato, facoltativo; il tavolo si restringe per restare visibile */
@@ -108,26 +110,35 @@ summary{cursor:pointer;font-weight:800;color:var(--gold2)}
 .minis{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
 .minis .btn{text-align:left;white-space:normal;font-size:14px}
 .minis small{display:block;color:var(--mute);font-weight:400;font-size:12px;margin-top:3px}
-/* telefono in orizzontale: HUD e barra laterali */
-@media (orientation:landscape) and (max-height:520px){
- #app{grid-template-rows:1fr;grid-template-columns:136px 1fr 170px}
- .hud{flex-direction:column;align-items:stretch;border-bottom:0;border-right:1px solid var(--line);padding:6px;gap:6px;overflow:auto}
- .pchip{padding:5px 8px;flex-wrap:wrap;gap:4px 6px}
- .pchip .nm{max-width:100px;font-size:13px}
- .pchip .sc{font-size:17px}
- .hmid{flex:0 0 auto;font-size:11px}
- .dock{border-top:0;border-left:1px solid var(--line);padding:6px;overflow:auto}
- .dg{flex-direction:column;gap:6px}
- .pbar{width:100%}
- .btn{padding:8px 10px;font-size:14px}
- .btn.ic{width:40px;height:40px}
- .spin{top:auto;bottom:4px;left:4px;right:4px;width:auto;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 30px 4px 8px}
- .spin h3{position:absolute;top:2px;right:2px;margin:0}.spin h3 span{display:none}
- .sp-row{flex-direction:row;align-items:center}
- #ballCv{width:76px}#sideCv{width:104px}.spin input[type=range]{width:104px}
- .chips{width:170px;margin:0}.chip{padding:3px 7px;font-size:11px}
- .ov h1{font-size:30px}
-}
+/* layout compatto (telefoni e tablet in orizzontale, schermo intero): tavolo grande al centro,
+   informazioni a sinistra e comandi a destra in colonne strette. La classe la mette applyCompact() */
+body.compact #app{grid-template-rows:1fr;grid-template-columns:calc(112px + env(safe-area-inset-left)) 1fr calc(120px + env(safe-area-inset-right))}
+body.compact .hud{flex-direction:column;align-items:stretch;border-bottom:0;border-right:1px solid var(--line);padding:5px;padding-left:calc(5px + env(safe-area-inset-left));gap:5px;overflow:auto}
+body.compact .hbtns{justify-content:space-between}
+body.compact .pchip{padding:4px 6px;flex-wrap:wrap;gap:2px 5px}
+body.compact .pchip .dot{width:14px;height:14px}
+body.compact .pchip .nm{max-width:84px;font-size:12px}
+body.compact .pchip .sc{font-size:15px}
+body.compact .pchip .tg{font-size:10px}
+body.compact .hmid{flex:0 0 auto;font-size:10.5px}
+body.compact .dock{border-top:0;border-left:1px solid var(--line);padding:5px;padding-right:calc(5px + env(safe-area-inset-right));overflow:auto;align-items:stretch}
+body.compact .dg{flex-direction:column;gap:5px;justify-content:center}
+body.compact .btn{padding:7px 8px;font-size:13px}
+body.compact .btn.ic{width:36px;height:36px;font-size:19px}
+body.compact .ang{font-size:14px;min-width:0}
+body.compact .minib{width:40px;height:40px}body.compact .minib canvas{width:36px;height:36px}
+body.compact .hint{font-size:12px}
+/* barra della potenza verticale, alta quasi quanto lo schermo: si vede bene mentre sale e scende */
+body.compact #dgPow{height:100%;flex-wrap:nowrap}
+body.compact .pbar{width:64px;height:auto;flex:1 1 auto;min-height:140px;border-radius:14px;background:linear-gradient(0deg,#2f8a4a,#e7c34a 60%,#d8443a)}
+body.compact .pbar span{font-size:17px;font-weight:700}
+body.compact .spin{top:auto;bottom:4px;left:4px;right:4px;width:auto;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 30px 4px 8px}
+body.compact .spin h3{position:absolute;top:2px;right:2px;margin:0}body.compact .spin h3 span{display:none}
+body.compact .sp-row{flex-direction:row;align-items:center}
+body.compact #ballCv{width:76px}body.compact #sideCv{width:104px}body.compact .spin input[type=range]{width:104px}
+body.compact .chips{width:170px;margin:0}body.compact .chip{padding:3px 7px;font-size:11px}
+body.compact .ov h1{font-size:30px}
+body.compact .tst{font-size:13px;padding:6px 10px}
 /* telefono in verticale */
 @media (max-width:620px) and (orientation:portrait){
  .hud{flex-wrap:wrap;gap:6px;padding:6px 8px}
@@ -138,7 +149,7 @@ summary{cursor:pointer;font-weight:800;color:var(--gold2)}
  .btn.ic{width:42px;height:42px}
  .dock{padding:6px 8px}
  .dg{gap:6px}
- .pbar{width:min(240px,46vw)}
+ #dgPow{flex-wrap:nowrap}.pbar{flex:1 1 auto;width:auto;min-width:0;height:42px}
  .ov h1{font-size:34px}
  .ov .card{padding:14px}
 }
@@ -149,7 +160,7 @@ summary{cursor:pointer;font-weight:800;color:var(--gold2)}
 </style></head><body>
 <div id="app">
  <div class="hud">
-  <button class="btn ic" id="btnMenu" title="Menu">☰</button>
+  <div class="hbtns"><button class="btn ic" id="btnMenu" title="Menu">☰</button><button class="btn ic" id="btnFs" title="Schermo intero">⛶</button></div>
   <div class="pchip" id="pc0"><span class="dot"></span><span class="nm"></span><span class="tg"></span><span class="sc"></span></div>
   <div class="hmid" id="hmid"></div>
   <div class="pchip" id="pc1"><span class="dot"></span><span class="nm"></span><span class="tg"></span><span class="sc"></span></div>
@@ -699,7 +710,7 @@ function setPhase(ph){G.phase=ph;
  if(sp)drawSpinUI();
  if(was!==sp)layout();
  if(ph==='aim'){G.predDirty=true;updAng();drawMini();guideBtn()}
- if(ph==='power'){G.pt0=performance.now();$('#plast').style.left=(G.lastPow*100)+'%'}
+ if(ph==='power'){G.pt0=performance.now();G.pw=0;powUI(0)}
  if(ph==='roll'||ph==='settle'){$('#waitTxt').textContent='Le palle corrono…';$('#btnFast').hidden=false}
  if(ph==='cpu'||ph==='cpuaim'){$('#waitTxt').textContent=`${curP().name} sta studiando il tiro…`;$('#btnFast').hidden=true}
  hud();
@@ -996,7 +1007,11 @@ function draw(){
   if(!cfg.guide||G.phase==='cpuaim'||G.shot.hand){const A=G.shot.ang+squirt(G.shot),ux=Math.cos(A),uy=Math.sin(A),l=0.45;ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=px(2);ctx.setLineDash([px(7),px(6)]);ctx.beginPath();ctx.moveTo(me.x+ux*BR,me.y+uy*BR);ctx.lineTo(me.x+ux*l,me.y+uy*l);ctx.stroke();ctx.setLineDash([]);
    const hx=me.x+ux*l,hy=me.y+uy*l,hs=0.03;ctx.fillStyle='rgba(255,255,255,.85)';ctx.beginPath();ctx.moveTo(hx+ux*hs,hy+uy*hs);ctx.lineTo(hx-uy*hs*0.6,hy+ux*hs*0.6);ctx.lineTo(hx+uy*hs*0.6,hy-ux*hs*0.6);ctx.closePath();ctx.fill()}
   const pull=G.phase==='power'?0.02+G.pw*0.2:(G.phase==='cpuaim'&&G.cpuT&&G.cpuT.pw?0.02+G.cpuT.pw*0.2:0.02);
-  if(G.shot.hand)drawHand(ctx,me,G.shot,pull);else drawCue(ctx,me,G.shot,pull)}
+  if(G.shot.hand)drawHand(ctx,me,G.shot,pull);else drawCue(ctx,me,G.shot,pull);
+  // anello della potenza attorno alla palla: si vede dove si sta guardando
+  const pw=G.phase==='power'?G.pw:G.phase==='cpuaim'&&G.cpuT&&G.cpuT.pw?G.cpuT.pw:null;
+  if(pw!=null){const rr=BR+px(9);ctx.lineCap='round';ctx.lineWidth=px(7);ctx.strokeStyle='rgba(0,0,0,.55)';ctx.beginPath();ctx.arc(me.x,me.y,rr,0,7);ctx.stroke();
+   ctx.strokeStyle=`hsl(${120-120*pw},85%,55%)`;ctx.beginPath();ctx.arc(me.x,me.y,rr,Math.PI/2,Math.PI/2+Math.max(0.02,pw)*Math.PI*2);ctx.stroke()}}
 }
 // boccette: la mano che accompagna la boccia (palmo e dita dietro la boccia)
 function drawHand(c,b,sh,pull){const u=[Math.cos(sh.ang),Math.sin(sh.ang)],e=[u[1],-u[0]],d=BR*1.15+pull*0.4,cx=b.x-u[0]*(d+0.03),cy=b.y-u[1]*(d+0.03);
@@ -1232,7 +1247,7 @@ function update(dt,now){if(!G||!$('#ovMenu').hidden)return;const S=G.S;
   for(const b of S.balls){if(b.wx||b.wy||b.wz)rotM(b.M,b.wx,b.wy,b.wz,Math.hypot(b.wx,b.wy,b.wz)*sp)}
   if(allStopped(S)){G.phase='settle';G.tw=0.35}}
  else if(G.phase==='settle'){G.tw-=dt;if(G.tw<=0){G.phase='idle';afterShot()}}
- else if(G.phase==='power'){G.pw=tri((now-G.pt0)/1000);$('#pmask').style.left=(G.pw*100)+'%';$('#pTxt').textContent=Math.round(G.pw*100)+'%';
+ else if(G.phase==='power'){G.pw=tri((now-G.pt0)/1000);powUI(G.pw);
   if(cfg.guide&&Math.abs(G.pw-(G.predP||0))>0.012){G.shot.p=G.pw;G.pred=predict();G.predP=G.pw}}
  else if(G.phase==='aim'){if(cfg.guide&&G.predDirty){G.shot.p=G.lastPow;G.pred=predict();G.predDirty=false}}
  else if(G.phase==='cpu')aiWork(9);
@@ -1244,12 +1259,38 @@ function update(dt,now){if(!G||!$('#ovMenu').hidden)return;const S=G.S;
 function frame(now){const dt=Math.min(0.05,(now-last)/1000);last=now;update(dt,now);draw();requestAnimationFrame(frame)}
 
 let rzT=null;
-function onResize(){clearTimeout(rzT);rzT=setTimeout(()=>{layout();if(G&&!$('#spinPanel').hidden)drawSpinUI()},60)}
+function onResize(){clearTimeout(rzT);rzT=setTimeout(()=>{applyCompact();layout();if(G&&!$('#spinPanel').hidden)drawSpinUI()},60)}
+
+// ---------- schermo intero e layout compatto ----------
+// compatto = orizzontale su telefono/tablet (o a schermo intero): tavolo grande, info e comandi in colonne laterali
+function applyCompact(){const w=innerWidth,h=innerHeight,coarse=matchMedia('(pointer:coarse)').matches,fs=!!(document.fullscreenElement||document.webkitFullscreenElement);
+ const c=w>h&&(h<=520||(coarse&&h<=900)||(fs&&h<900));document.body.classList.toggle('compact',c);
+ $('#btnFs').textContent=fs?'🗗':'⛶';$('#btnFs').title=fs?'Esci dallo schermo intero':'Schermo intero';
+ if(G&&G.phase==='power')powUI(G.pw||0)}
+// barra della potenza: orizzontale di solito, verticale (si riempie dal basso) nel layout compatto
+function powUI(p){const v=document.body.classList.contains('compact'),m=$('#pmask').style,l=$('#plast').style,lp=G?G.lastPow:0.5;
+ if(v){m.cssText=`left:0;right:0;top:0;height:${(1-p)*100}%`;l.cssText=`left:-2px;right:-2px;height:3px;bottom:${lp*100}%`}
+ else{m.cssText=`top:0;bottom:0;right:0;left:${p*100}%`;l.cssText=`top:-2px;bottom:-2px;width:3px;left:${lp*100}%`}
+ $('#pTxt').textContent=Math.round(p*100)+'%'}
+async function toggleFs(){const d=document,el=d.documentElement,on=d.fullscreenElement||d.webkitFullscreenElement;
+ try{
+  if(on){await (d.exitFullscreen||d.webkitExitFullscreen).call(d);return}
+  const rq=el.requestFullscreen||el.webkitRequestFullscreen;if(!rq)throw new Error('no');
+  await rq.call(el,{navigationUI:'hide'});
+  try{await screen.orientation.lock('landscape')}catch(e){if(innerHeight>innerWidth)toast('Ruota il dispositivo in orizzontale per il tavolo più grande','gold')}
+ }catch(e){
+  card('Schermo intero',`<p>Questo browser non permette di mettere la pagina a schermo intero con un pulsante (succede su iPhone).</p>
+   <p><b>Su iPhone e iPad:</b> tocca <b>Condividi</b> ⬆️ e poi <b>«Aggiungi alla schermata Home»</b>. Apri il gioco dalla nuova icona: si apre a tutto schermo, senza barre del browser.</p>
+   <p>Poi ruota il telefono in orizzontale: il tavolo occupa quasi tutto lo schermo, con informazioni e comandi piccoli ai lati.</p>`,[{t:'Ho capito',cls:'pri'}])}}
+$('#btnFs').onclick=toggleFs;
+for(const ev of ['fullscreenchange','webkitfullscreenchange'])document.addEventListener(ev,onResize);
+if(screen.orientation)screen.orientation.addEventListener('change',onResize);
 window.addEventListener('resize',onResize);
 if(window.ResizeObserver)new ResizeObserver(onResize).observe(stage);
 
 // ---------- avvio ----------
 function start(){
+ applyCompact();
  $('#pc0').hidden=true;$('#pc1').hidden=true;$('#hmid').innerHTML='<b>Stecca d\'Oro</b>';
  $$('.dg').forEach(e=>e.hidden=true);
  layout();renderMenu();requestAnimationFrame(frame)}
