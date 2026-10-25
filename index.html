@@ -487,14 +487,19 @@ function evalBocce(ev,bat,col,sx,first,pins){
   if(e.k==='c'&&e.a===bat&&!fh){cushAny=true;if(e.s==='T')cushT=true}
   else if(e.k==='b'&&(e.a===bat||e.b===bat)){const o=e.a===bat?e.b:e.a;if(!fh)fh=o;if(!batHit.includes(o))batHit.push(o)}
   else if(e.k==='p'&&e.a===bat&&!fh)fh='pin'}
- // birilli: positivi se abbattuti da pallino o bocce avversarie arrivate di sponda (o di carambola), negativi altrimenti
- const moved={},bank={},seen=new Set(),pos=[],neg=[];
+ // birilli (FIBiS art. 9 e 13): quelli abbattuti dalle proprie bocce sono sempre negativi; quelli abbattuti da pallino o
+ // bocce avversarie sono positivi solo se la palla è "buona": è arrivata sui birilli dopo una sponda (tiro diretto), è stata
+ // colpita di carambola, è stata colpita dalla battente di ritorno dalla sponda corta in alto (tiro indiretto) oppure ci è
+ // stata mandata da una palla già buona. Altrimenti (friso, traversino dalla sponda lunga, fisso) i punti vanno all'avversario.
+ const moved={},ok={},seen=new Set(),pos=[],neg=[],bs=new Set();
  for(const e of ev){
-  if(e.k==='b'){moved[e.a]=moved[e.b]=true}
-  else if(e.k==='c'&&moved[e.a])bank[e.a]=true;
+  if(e.k==='b'){for(const[x,y]of[[e.a,e.b],[e.b,e.a]]){
+    if(x===bat){if(!bs.has(y)){bs.add(y);if(bs.size>1||cushT)ok[y]=true}}
+    else if(ok[x])ok[y]=true}
+   moved[e.a]=moved[e.b]=true}
+  else if(e.k==='c'&&moved[e.a]&&e.a!==bat)ok[e.a]=true;
   else if(e.k==='p'&&!seen.has(e.p)){seen.add(e.p);const X=e.a,k=pins[e.p].kind;
-   if(X===bat||ck(X)===col)neg.push(k);
-   else{const car=batHit.indexOf(X)>0;(bank[X]||car?pos:neg).push(k)}}}
+   if(X===bat||ck(X)===col||!ok[X])neg.push(k);else pos.push(k)}}
  const tot=pos.length+neg.length,all=bocceVal([...pos,...neg],tot);
  const IRR=(msg,pen)=>({irr:true,pen,pts:0,opp:all,msg,np:tot});
  if(fh==='pin')return IRR('la tua boccia ha colpito direttamente i birilli');
@@ -1203,8 +1208,17 @@ $('#btnRules').onclick=()=>card('Regole e comandi',`<div class="rules">
  <li>Ogni giocata comincia con il pallino posizionato oltre la metà campo; chi lo posiziona fa la <b>bocciata d'acchito</b>, che deve colpire il pallino direttamente.</li>
  <li>Poi tira sempre chi è «fuori punto», cioè chi non ha la boccia più vicina al pallino, finché le bocce finiscono.</li>
  <li><b>Accosto</b> a fine giocata: 1, 2, 3 o 4 bocce più vicine di quelle avversarie valgono 2, 3, 5 o 8 punti.</li>
- <li><b>Birilli</b>: bianco 2, rosso 4, rosso da solo 8. Contano a tuo favore se li abbatte il pallino o una boccia avversaria dopo aver toccato una sponda (o di carambola); se ci vanno dritti (friso) o li abbatte una tua boccia, i punti vanno all'avversario.</li>
- <li>Tiro di sponda (la tua boccia tocca la sponda corta in alto prima di colpire): birilli doppi.</li>
+ <li><b>Birilli</b>: bianco 2, rosso 4, rosso da solo 8. Fai punti solo se i birilli li abbatte il <b>pallino</b> o una <b>boccia avversaria</b>, e solo con uno di questi tiri:
+  <ul><li><b>di sponda</b>: la palla che colpisci tocca almeno una sponda prima di arrivare sui birilli;</li>
+  <li><b>doppio</b>: la tua boccia tocca prima la <b>sponda corta in alto</b>, poi colpisce la palla, che può andare anche dritta sui birilli. I birilli valgono il <b>doppio</b>;</li>
+  <li><b>di carambola</b>: la tua boccia tocca prima un'altra palla, poi colpisce quella che va sui birilli;</li>
+  <li>la palla colpita, dopo una sponda, manda un'altra palla sui birilli.</li></ul></li>
+ <li><b>Si beve</b> (i punti vanno all'avversario) quando:
+  <ul><li>colpisci la palla e questa va <b>dritta</b> sui birilli, senza sponde (<b>friso</b>);</li>
+  <li>la tua boccia tocca prima una <b>sponda lunga</b> e poi la palla, che va dritta sui birilli (<b>traversino</b>);</li>
+  <li>la palla colpita ne manda un'altra dritta sui birilli (<b>fisso</b>);</li>
+  <li>i birilli li abbatte una tua boccia, anche quella appena lanciata dopo aver colpito qualcosa.</li></ul>
+  Nel tiro doppio anche i punti bevuti valgono doppio.</li>
  <li>Tiri irregolari: colpire di diretto i birilli, o una boccia o il pallino che non hanno superato la metà campo. La boccia viene annullata, si rimette tutto com'era e i birilli vanno all'avversario.</li></ul>
  <h3>Temperatura del tavolo</h3><ul><li>Standard 30 °C (tavolo riscaldato). Più caldo: panno più veloce e sponde più vive; più freddo: il contrario.</li></ul>
  <h3>Rallentatore</h3><ul><li>Quando una palla sta per arrivare sul birillo rosso (o lo sfiora) il tiro rallenta e l'inquadratura si avvicina. Si spegne dal menu; «⏩ Veloce» lo salta.</li></ul></div>`,[{t:'Chiudi',cls:'pri'}]);
