@@ -184,6 +184,8 @@ body.compact .tst{font-size:13px;padding:6px 10px}
    <span class="ang" id="angTxt">0,0°</span>
    <button class="btn ic rep" data-r="-1" title="Ruota a destra (tieni premuto)">↻</button>
    <button class="btn" id="btnGuide">Guida</button>
+   <button class="btn" id="btnCall" hidden title="Cambia la palla chiamata; la buca si chiama toccandola sul tavolo">📣</button>
+   <button class="btn" id="btnPush" hidden title="Push out: subito dopo la spaccata puoi spostare la bianca dove vuoi">Push out</button>
    <button class="btn pri" id="btnToPow">Potenza ▸</button>
   </div>
   <div class="dg" id="dgPow" hidden>
@@ -199,7 +201,8 @@ body.compact .tst{font-size:13px;padding:6px 10px}
 <div class="ov" id="ovMenu">
  <div class="card">
   <h1>Stecca d'Oro</h1>
-  <p class="sub">Biliardo all'italiana e alla goriziana</p>
+  <p class="sub" id="menuSub">Biliardo all'italiana e alla goriziana</p>
+  <div class="tabs" id="worldTabs"><button class="btn" data-w="it">🇮🇹 Biliardo italiano</button><button class="btn" data-w="pool">🎱 Pool (buche)</button></div>
   <div class="tabs" id="modeTabs">
    <button class="btn" data-m="2p">👥 Due giocatori</button>
    <button class="btn" data-m="cpu">🤖 Contro il computer</button>
@@ -209,8 +212,8 @@ body.compact .tst{font-size:13px;padding:6px 10px}
   <div id="mSetup">
    <div class="grp"><div class="lbl">Specialità</div><div class="seg" id="segGame"></div></div>
    <div class="grp" id="grpGorVar"><div class="lbl">Variante della goriziana</div><div class="seg" id="segGorVar"></div></div>
-   <div class="grp"><div class="lbl">Punti per vincere</div><div class="seg" id="segTarget"></div></div>
-   <div class="grp"><div class="lbl">Set (come nei tornei: la goriziana si gioca 2 set su 3 ai 400)</div><div class="seg" id="segSets">
+   <div class="grp"><div class="lbl" id="lblTarget">Punti per vincere</div><div class="seg" id="segTarget"></div></div>
+   <div class="grp" id="grpSets"><div class="lbl">Set (come nei tornei: la goriziana si gioca 2 set su 3 ai 400)</div><div class="seg" id="segSets">
     <button class="btn" data-v="1">Partita secca</button><button class="btn" data-v="2">2 set su 3</button><button class="btn" data-v="3">3 set su 5</button></div></div>
    <div class="grp"><div class="lbl">Nomi</div><div class="names"><input id="nm0" maxlength="16"><input id="nm1" maxlength="16"></div></div>
    <div class="grp" id="grpDiff"><div class="lbl">Bravura del computer</div><div class="seg" id="segDiff">
@@ -230,7 +233,7 @@ body.compact .tst{font-size:13px;padding:6px 10px}
     <div class="sp-cap" id="tempInfo" style="text-align:left;margin-top:4px"></div></div>
    <div class="grp"><div class="lbl">Colpo guidato</div><div class="seg" id="segGuide">
     <button class="btn" data-v="0">Spento</button><button class="btn" data-v="1">Base (fino al primo contatto)</button><button class="btn" data-v="2">Completo (tutte le palle)</button></div></div>
-   <div class="grp"><div class="lbl">Rallentatore e zoom quando una palla arriva sul birillo rosso</div><div class="seg" id="segSlow"><button class="btn" data-v="1">Attivo</button><button class="btn" data-v="0">Spento</button></div></div>
+   <div class="grp"><div class="lbl">Rallentatore e zoom (birillo rosso; nel pool la palla decisiva vicino alla buca)</div><div class="seg" id="segSlow"><button class="btn" data-v="1">Attivo</button><button class="btn" data-v="0">Spento</button></div></div>
    <div class="grp"><div class="lbl">Suoni</div><div class="seg" id="segSound"><button class="btn" data-v="1">Attivi</button><button class="btn" data-v="0">Spenti</button></div></div>
   </details>
   <div class="mbtns"><button class="btn" id="btnResume" hidden>▸ Riprendi</button><button class="btn pri big" id="btnPlay">Gioca</button><button class="btn" id="btnRules">Regole e comandi</button><button class="btn" id="btnHist">📜 Storia del biliardo</button></div>
@@ -242,7 +245,10 @@ body.compact .tst{font-size:13px;padding:6px 10px}
 <script>
 (()=>{'use strict';
 // ---------- costanti e helper ----------
-const g=9.81, BR=0.03075, PR=0.0045, DT=1/400;
+const g=9.81, PR=0.0045, DT=1/400;
+// raggio della palla: 61,5 mm nel biliardo italiano, 57,15 mm (2 1/4") nel pool. Cambia con il tavolo (setBR)
+const BR_IT=0.03075, BR_POOL=0.028575;let BR=BR_IT;
+function setBR(T){BR=T.pool?BR_POOL:BR_IT}
 const CW=0.045, WD=0.105, EXT=CW+WD;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
@@ -251,16 +257,25 @@ function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math
 function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
 // palle: w bianca, y gialla, r pallino rosso; boccette: R1..R4 rosse, W1..W4 bianche, P pallino blu
 const BALLCOL={w:['#ffffff','#e4e0d6','#8f8a7d'],y:['#fff6b8','#f2cf3c','#94700c'],r:['#ff9a8a','#d23a2c','#6e130d'],
- R:['#ff8c80','#c8281e','#5e0f0a'],W:['#ffffff','#ece6d8','#9a9282'],P:['#a8cfff','#2f6fd8','#0f2f66']};
-const SPOTCOL={w:'#c0392b',y:'#6b4a00',r:'#ffe0d8',R:'#ffd9d0',W:'#7a6a50',P:'#e8f2ff'};
+ R:['#ff8c80','#c8281e','#5e0f0a'],W:['#ffffff','#ece6d8','#9a9282'],P:['#a8cfff','#2f6fd8','#0f2f66'],c:['#ffffff','#efeae0','#9a9282']};
+const SPOTCOL={w:'#c0392b',y:'#6b4a00',r:'#ffe0d8',R:'#ffd9d0',W:'#7a6a50',P:'#e8f2ff',c:'#c0392b'};
 const ck=id=>id.length>1?id[0]:id;   // chiave colore di una palla
+// pool: c = bianca, b1..b15 = palle numerate (1-7 piene, 8 nera, 9-15 spezzate)
+const PCOL=['#ffffff','#f2c12e','#1f56c6','#d6301f','#5e2c91','#f07d17','#14904a','#7e1e1e','#151515'];
+const pnum=id=>id[0]==='b'?+id.slice(1):0;
 // specialità: cue = stecca con birilli, carom = carambola senza birilli, bocce = boccette a mano
 const GAMES={
  italiana:{name:'All\'italiana',sub:'5 birilli',kind:'cue',targets:[25,50,60,100,120]},
  goriziana:{name:'Goriziana',sub:'9 birilli',kind:'cue',targets:[100,200,300,400]},
  tresponde:{name:'Tre sponde',sub:'carambola',kind:'carom',need:3,targets:[10,15,25]},
  libera:{name:'Carambola libera',sub:'senza birilli',kind:'carom',need:0,targets:[20,30,50]},
- boccette:{name:'Boccette',sub:'a mano',kind:'bocce',targets:[50,80,100]}};
+ boccette:{name:'Boccette',sub:'a mano',kind:'bocce',targets:[50,80,100]},
+ // pool (regole WPA): si gioca "alla corsa", i numeri sono le partite da vincere
+ otto:{name:'Palla 8',sub:'piene e spezzate',kind:'pool',world:'pool',money:'b8',targets:[1,2,3,5,7]},
+ nove:{name:'Palla 9',sub:'dalla più bassa',kind:'pool',world:'pool',money:'b9',targets:[1,2,3,5,7]},
+ dieci:{name:'Palla 10',sub:'con chiamata',kind:'pool',world:'pool',money:'b10',targets:[1,2,3,5,7]}};
+const world=()=>cfg.world==='pool'?'pool':'it';
+const gWorld=k=>GAMES[k].world||'it';
 const GORVAR={classica:'Classica (sponda = doppio)',doppi:'Tutti doppi',filotto:'Filotto'};
 
 // ---------- tavoli ----------
@@ -270,7 +285,12 @@ const TABLES={
  circolo:{name:'Circolo',sub:'2,50 × 1,25 m · verde bosco',L:2.5,W:1.25,cloth:'#2b7552',cloth2:'#1a5236',wood:'#2b1a10',wood2:'#5b3a22'},
  bar:{name:'Bar',sub:'2,20 × 1,10 m · rosso vino',L:2.2,W:1.1,cloth:'#8c2b36',cloth2:'#621a23',wood:'#5a3a1e',wood2:'#946236'},
  antico:{name:'Antico',sub:'2,84 × 1,42 m · ottocentesco',L:2.84,W:1.42,cloth:'#5f7d3a',cloth2:'#435a27',wood:'#5e3315',wood2:'#b07a42',inlay:1},
- moderno:{name:'Moderno',sub:'2,84 × 1,42 m · grigio antracite',L:2.84,W:1.42,cloth:'#58636e',cloth2:'#3b444d',wood:'#141416',wood2:'#3c3c42'}
+ moderno:{name:'Moderno',sub:'2,84 × 1,42 m · grigio antracite',L:2.84,W:1.42,cloth:'#58636e',cloth2:'#3b444d',wood:'#141416',wood2:'#3c3c42'},
+ // pool: tavoli con 6 buche. cm/sm = larghezza della bocca delle buche d'angolo e centrali (WPA: 4,5"-4,625" e 5"-5,125")
+ p9:{name:'Pool 9 piedi',sub:'2,54 × 1,27 m · blu da torneo',L:2.54,W:1.27,cloth:'#2a6fb5',cloth2:'#1b4f86',wood:'#1a1410',wood2:'#3d2d22',pool:1,cm:0.116,sm:0.13},
+ p8:{name:'Pool 8 piedi',sub:'2,34 × 1,17 m · verde',L:2.34,W:1.17,cloth:'#1f8a55',cloth2:'#136440',wood:'#4a2a16',wood2:'#8a5a32',pool:1,cm:0.118,sm:0.132},
+ p7:{name:'Pool da bar',sub:'1,98 × 0,99 m · rosso, buche larghe',L:1.98,W:0.99,cloth:'#9b2335',cloth2:'#6c1624',wood:'#2b1b12',wood2:'#6b4428',pool:1,cm:0.124,sm:0.138},
+ pnero:{name:'Pool nero',sub:'2,54 × 1,27 m · grigio, buche strette',L:2.54,W:1.27,cloth:'#4c5560',cloth2:'#323941',wood:'#0d0d0f',wood2:'#2e2e34',pool:1,cm:0.11,sm:0.125}
 };
 
 // ---------- ambienti ----------
@@ -321,16 +341,31 @@ const CTXS={
   const t=Math.max(30,Math.min(w,h)/9);c.strokeStyle='rgba(150,140,128,.35)';for(let x=0;x<w;x+=t*2){c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke()}for(let y=0;y<h;y+=t*2){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke()}
   c.fillStyle='#8e1b24';c.fillRect(w*.32,0,w*.36,h);c.strokeStyle='#d6a93a';c.lineWidth=4;c.strokeRect(w*.32,-5,w*.36,h+10);
   for(const [fx,fy] of [[.06,.1],[.94,.1],[.06,.9],[.94,.9]]){circ(c,w*fx,h*fy,t*.55,'#b8892c');circ(c,w*fx,h*fy,t*.4,'#e8c25a')}
-  vignette(c,w,h,.45)}}
+  vignette(c,w,h,.45)}},
+ pub:{name:'Pub irlandese',sub:'legno scuro e freccette',lamp:'255,200,140',draw(c,w,h,R){
+  const t=Math.max(18,Math.min(w,h)/16);for(let y=0;y<h;y+=t){c.fillStyle=(y/t|0)%2?'#3a2414':'#432a17';c.fillRect(0,y,w,t-1.5);for(let x=(y/t|0)%2*t*1.7;x<w;x+=t*3.4){c.fillStyle='rgba(0,0,0,.35)';c.fillRect(x,y,1.5,t)}}
+  const bx=w*.5,by=t*1.2;circ(c,bx,by,t*1.05,'#1b1b1b');for(let k=0;k<20;k++){c.fillStyle=k%2?'#e9dcc0':'#1b1b1b';c.beginPath();c.moveTo(bx,by);c.arc(bx,by,t*.9,k*Math.PI/10,(k+1)*Math.PI/10);c.fill()}
+  circ(c,bx,by,t*.55,'#2f7d3a');circ(c,bx,by,t*.25,'#b3262b');circ(c,bx,by,t*.08,'#2f7d3a');
+  for(const [fx,fy] of [[.07,.3],[.07,.7],[.93,.3],[.93,.7]]){circ(c,w*fx,h*fy,t*.7,'#5a1e14');circ(c,w*fx,h*fy,t*.5,'#7a2a1c')}
+  c.fillStyle='#1f5130';c.fillRect(0,h-t*1.1,w,t*1.1);c.fillStyle='#c79a3c';c.fillRect(0,h-t*1.1,w,t*.12);
+  vignette(c,w,h,.6)}},
+ neon:{name:'Sala giochi',sub:'luci al neon e slot',lamp:'235,220,255',draw(c,w,h,R){
+  c.fillStyle='#120c22';c.fillRect(0,0,w,h);const t=Math.max(24,Math.min(w,h)/12);c.strokeStyle='rgba(120,90,220,.18)';c.lineWidth=1;
+  for(let x=0;x<w;x+=t){c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke()}for(let y=0;y<h;y+=t){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke()}
+  for(const [x0,col] of [[.04,'#ff3fa4'],[.96,'#3fe0ff']]){c.save();c.shadowColor=col;c.shadowBlur=18;c.strokeStyle=col;c.lineWidth=4;c.beginPath();c.moveTo(w*x0,h*.08);c.lineTo(w*x0,h*.92);c.stroke();c.restore()}
+  for(let x=t*1.5;x<w-t;x+=t*1.6){c.fillStyle='#2b1f4a';c.fillRect(x,t*.3,t*1.1,t*1.5);c.fillStyle=['#ff3fa4','#ffd23f','#3fe0ff'][(x/t|0)%3];c.fillRect(x+t*.15,t*.5,t*.8,t*.45);c.fillStyle='#fff';c.font=`700 ${t*.3}px Figtree`;c.fillText('7',x+t*.45,t*.85)}
+  vignette(c,w,h,.5)}}
 };
 
 // ---------- impostazioni ----------
-const DEF={mode:'cpu',game:'italiana',gorVar:'classica',target:{italiana:50,goriziana:200,tresponde:15,libera:30,boccette:80},names:['Giocatore 1','Giocatore 2'],diff:1,table:'classico',ctx:'circolo',temp:30,guide:0,sound:1,slowmo:1,miniLv:0,sets:1};
+const DEF={mode:'cpu',world:'it',game:'italiana',pgame:'otto',gorVar:'classica',target:{italiana:50,goriziana:200,tresponde:15,libera:30,boccette:80,otto:3,nove:3,dieci:3},names:['Giocatore 1','Giocatore 2'],diff:1,table:'classico',ptable:'p9',ctx:'circolo',temp:30,guide:0,sound:1,slowmo:1,miniLv:0,sets:1};
 let cfg;try{cfg=Object.assign({},DEF,JSON.parse(localStorage.getItem('sd-cfg')||'{}'))}catch(e){cfg=Object.assign({},DEF)}
 cfg.target=Object.assign({},DEF.target,cfg.target||{});
 if(!cfg.gv){cfg.guide=0;cfg.gv=1}   // il colpo guidato parte spento: si attiva solo se scelto
-if(!TABLES[cfg.table])cfg.table='classico';if(!CTXS[cfg.ctx])cfg.ctx='circolo';
-if(!GAMES[cfg.game])cfg.game='italiana';if(!GORVAR[cfg.gorVar])cfg.gorVar='classica';
+if(!TABLES[cfg.table]||TABLES[cfg.table].pool)cfg.table='classico';if(!TABLES[cfg.ptable]||!TABLES[cfg.ptable].pool)cfg.ptable='p9';if(!CTXS[cfg.ctx])cfg.ctx='circolo';
+if(!GAMES[cfg.game]||gWorld(cfg.game)!=='it')cfg.game='italiana';if(!GAMES[cfg.pgame]||gWorld(cfg.pgame)!=='pool')cfg.pgame='otto';if(!GORVAR[cfg.gorVar])cfg.gorVar='classica';
+// specialità e tavolo scelti nel menu: ogni "mondo" (italiano, pool) ricorda i suoi
+const GK=()=>world()==='pool'?'pgame':'game', TK=()=>world()==='pool'?'ptable':'table';
 function saveCfg(){try{localStorage.setItem('sd-cfg',JSON.stringify(cfg))}catch(e){}}
 
 // parametri fisici in funzione della temperatura del tavolo (30 °C = tavolo riscaldato standard)
@@ -349,8 +384,10 @@ function randRot(){const a=Math.random()*6.28,b=Math.random()*6.28;const M=[1,0,
 function rotM(M,kx,ky,kz,th){const n=Math.hypot(kx,ky,kz);if(!n||!th)return;kx/=n;ky/=n;kz/=n;const c=Math.cos(th),s=Math.sin(th),C=1-c;
  const R=[c+kx*kx*C,kx*ky*C-kz*s,kx*kz*C+ky*s, ky*kx*C+kz*s,c+ky*ky*C,ky*kz*C-kx*s, kz*kx*C-ky*s,kz*ky*C+kx*s,c+kz*kz*C];
  const o=M.slice();for(let i=0;i<3;i++)for(let j=0;j<3;j++)M[i*3+j]=R[i*3]*o[j]+R[i*3+1]*o[3+j]+R[i*3+2]*o[6+j]}
-function mkState(L,W,P){return{L,W,P,balls:[],pins:[],ev:null,snd:null,t:0,pb:null}}
-function cloneS(S){return{L:S.L,W:S.W,P:S.P,t:0,ev:null,snd:null,pb:S.pb,
+function mkState(L,W,P,T){return{L,W,P,balls:[],pins:[],ev:null,snd:null,t:0,pb:null,
+ // pool: cg = tratto di sponda che manca vicino all'angolo (bocca d'angolo / √2), sg = mezza bocca della buca centrale
+ pk:T&&T.pool?{cg:T.cm/Math.SQRT2,sg:T.sm/2}:null}}
+function cloneS(S){return{L:S.L,W:S.W,P:S.P,t:0,ev:null,snd:null,pb:S.pb,pk:S.pk,
  balls:S.balls.map(b=>({id:b.id,x:b.x,y:b.y,vx:b.vx,vy:b.vy,wx:b.wx,wy:b.wy,wz:b.wz})),
  pins:S.pins.map(p=>({x:p.x,y:p.y,kind:p.kind,down:p.down}))}}
 function pinBox(S){if(!S.pins.length){S.pb=null;return}let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;for(const p of S.pins){x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y)}const m=BR+PR+0.01;S.pb={x0:x0-m,x1:x1+m,y0:y0-m,y1:y1+m}}
@@ -386,7 +423,23 @@ function hitCush(b,nx,ny,S){
  if(S.ev)S.ev.push({k:'c',a:b.id,s:nx<0?'T':nx>0?'B':'L',t:S.t});
  if(S.snd)S.snd('c',-vn);
 }
-function cushions(b,S){const hx=S.L/2-BR,hy=S.W/2-BR;
+// buche del pool, numerate 0-5: 0 angolo (−x,−y), 1 centrale −y, 2 angolo (+x,−y), 3 angolo (−x,+y), 4 centrale +y, 5 angolo (+x,+y)
+function pocketXY(i,L,W){const sy=i<3?-1:1,k=i%3;return[k===0?-L/2:k===1?0:L/2,sy*W/2]}
+// punto verso cui mirare per mandare una palla in buca (centro della bocca, un po' dentro)
+function pocketAim(i,S){const [x,y]=pocketXY(i,S.L,S.W),k=i%3;if(k===1)return[0,y];const g=S.pk.cg*0.35;return[x-Math.sign(x)*g,y-Math.sign(y)*g]}
+function poolCush(b,S){const Q=S.pk,L2=S.L/2,W2=S.W/2,hx=L2-BR,hy=W2-BR,g=Q.cg,sg=Q.sg,ax=Math.abs(b.x),ay=Math.abs(b.y),sx=b.x<0?-1:1,sy=b.y<0?-1:1;
+ // in buca: il centro della palla ha superato la bocca
+ if(ax>L2-g-BR&&ay>W2-g-BR&&ax+ay-(L2+W2)>-g+0.45*BR){b.pot=(sy<0?0:3)+(sx<0?0:2);return}
+ if(ax<sg&&ay>W2-0.2*BR){b.pot=sy<0?1:4;return}
+ // sponde dritte (interrotte dalle bocche delle buche)
+ if(ay>hy&&ax>sg&&ax<L2-g){if(b.vy*sy>0)hitCush(b,0,-sy,S);b.y=sy*hy}
+ if(ax>hx&&ay<W2-g){if(b.vx*sx>0)hitCush(b,-sx,0,S);b.x=sx*hx}
+ // punte delle sponde ai lati delle bocche
+ for(const [px,py] of [[sx*(L2-g),sy*W2],[sx*L2,sy*(W2-g)],[sg,sy*W2],[-sg,sy*W2]]){const dx=b.x-px,dy=b.y-py,d2=dx*dx+dy*dy;
+  if(d2<BR*BR&&d2>0){const d=Math.sqrt(d2),nx=dx/d,ny=dy/d;b.x=px+nx*BR;b.y=py+ny*BR;hitCush(b,nx,ny,S)}}
+ // uscita dal tavolo senza cadere: finisce nella buca più vicina
+ if(Math.abs(b.x)>L2+BR||Math.abs(b.y)>W2+BR){let bi=0,bd=1e9;for(let i=0;i<6;i++){const [x,y]=pocketXY(i,S.L,S.W),d=Math.hypot(b.x-x,b.y-y);if(d<bd){bd=d;bi=i}}b.pot=bi}}
+function cushions(b,S){if(S.pk)return poolCush(b,S);const hx=S.L/2-BR,hy=S.W/2-BR;
  if(b.x>hx){if(b.vx>0)hitCush(b,-1,0,S);b.x=hx}else if(b.x<-hx){if(b.vx<0)hitCush(b,1,0,S);b.x=-hx}
  if(b.y>hy){if(b.vy>0)hitCush(b,0,-1,S);b.y=hy}else if(b.y<-hy){if(b.vy<0)hitCush(b,0,1,S);b.y=-hy}}
 function collide(a,b,S){
@@ -412,6 +465,8 @@ function pinHits(b,S){const pb=S.pb;if(!pb||b.x<pb.x0||b.x>pb.x1||b.y<pb.y0||b.y
 function step(S){const B=S.balls;
  for(const b of B)if(mov(b)||b.wz)integ(b,S.P);
  for(const b of B)cushions(b,S);
+ if(S.pk)for(let i=B.length-1;i>=0;i--)if(B[i].pot!=null){const b=B[i];   // pool: la palla cade in buca ed esce dal gioco
+  if(S.ev)S.ev.push({k:'k',a:b.id,pk:b.pot,t:S.t});if(S.snd)S.snd('k',Math.hypot(b.vx,b.vy));B.splice(i,1)}
  for(let i=0;i<B.length;i++)for(let j=i+1;j<B.length;j++)collide(B[i],B[j],S);
  if(S.pb)for(const b of B)if(b.vx!==0||b.vy!==0)pinHits(b,S);
  S.t+=DT}
@@ -420,7 +475,7 @@ function cueSpeed(p){return 0.2+6.8*Math.pow(p,1.5)}
 function handSpeed(p){return 0.15+4.5*Math.pow(p,1.5)}     // boccette: lancio a mano, la boccia parte già rotolando
 function squirt(sh){return sh.a*0.03}
 function strike(ball,sh){
- const V=sh.hand?handSpeed(sh.p):cueSpeed(sh.p), th=sh.el*Math.PI/180, A=sh.ang+squirt(sh);
+ const V=(sh.hand?handSpeed(sh.p):cueSpeed(sh.p))*(sh.brk?1.3:1), th=sh.el*Math.PI/180, A=sh.ang+squirt(sh);
  const dx=Math.cos(A),dy=Math.sin(A),ct=Math.cos(th),st=Math.sin(th);
  const c=[dx*ct,dy*ct,-st], es=[dy,-dx,0], eu=[dx*st,dy*st,ct];
  const k=Math.sqrt(Math.max(0,1-sh.a*sh.a-sh.b*sh.b));
@@ -516,6 +571,67 @@ function accosto(S){const r=bocceRank(S);if(!r.length)return null;const c=r[0].c
  for(const x of r){if(x.col!==c){if(Math.abs(x.d-r[0].d)<0.001&&n===1)return null;break}n++}
  return{col:c,n,pts:[0,2,3,5,8][Math.min(n,4)]}}
 
+// pool (regole WPA). Gruppi della palla 8: 's' piene (1-7), 't' spezzate (9-15)
+const grpOf=id=>{const n=pnum(id);return n>=1&&n<=7?'s':n>=9?'t':null};
+const GRPN={s:'piene',t:'spezzate'};
+// pre = situazione a inizio tiro: brk spaccata, low palla più bassa, grp gruppo di chi tira, on8 deve tirare la 8,
+// push = push out dichiarato, kitchen = palla in mano dietro la linea di battuta, call = {ball, pk} palla e buca chiamate, xs = x delle palle
+function evalPool(gm,ev,pre){
+ let fc=null,fi=-1;
+ for(let i=0;i<ev.length;i++){const e=ev[i];if(e.k==='b'&&(e.a==='c'||e.b==='c')){fc=e.a==='c'?e.b:e.a;fi=i;break}}
+ const pots=[],pk={};for(const e of ev)if(e.k==='k'){pots.push(e.a);pk[e.a]=e.pk}
+ const scratch=pots.includes('c'),obj=pots.filter(x=>x!=='c'),mb=GAMES[gm].money;
+ let rail=false;if(fi>=0)for(let i=fi+1;i<ev.length;i++){const e=ev[i];if(e.k==='c'||(e.k==='k'&&e.a!=='c')){rail=true;break}}
+ const R={fc,pots:obj,scratch,foul:null,cont:false,win:false,lose:false,spot:[],assign:null,msg:'',opt:null,bihK:false};
+ const F=m=>{R.foul=m;return R};
+ const nm=id=>id==='b8'&&gm==='otto'?'la 8':'la '+pnum(id);
+ if(pre.brk){
+  const railB=new Set(ev.filter(e=>e.k==='c'&&e.a!=='c').map(e=>e.a));const legal=obj.length>0||railB.size>=4;
+  if(gm==='otto'){
+   if(obj.includes('b8'))R.spot.push('b8');
+   if(scratch){R.bihK=true;return F('bianca in buca sulla spaccata')}
+   if(!fc||!legal){R.opt='rebreak';R.msg='Spaccata non valida: nessuna palla in buca e meno di 4 palle in sponda';return R}
+   R.cont=obj.length>0;R.msg=obj.includes('b8')?'La 8 in buca sulla spaccata: torna sul punto e si continua':obj.length?`Spaccata: ${obj.length} in buca, il tavolo è aperto`:'';return R}
+  if(obj.includes('b10')&&gm==='dieci')R.spot.push('b10');
+  const foul=scratch?'bianca in buca sulla spaccata':fc!==pre.low?`la spaccata deve colpire prima ${nm(pre.low)}`:!legal?'spaccata non valida: nessuna palla in buca e meno di 4 palle in sponda':null;
+  if(foul){if(obj.includes(mb)&&!R.spot.includes(mb))R.spot.push(mb);return F(foul)}
+  if(gm==='nove'&&obj.includes('b9')){R.win=true;R.msg='La 9 in buca sulla spaccata: partita vinta!';return R}
+  R.cont=obj.length>0;R.msg=obj.length?`Spaccata: ${obj.length} in buca`+(obj.includes('b10')?' (la 10 torna sul punto)':''):'';return R}
+ if(pre.push){   // push out: basta non mandare in buca la bianca; la palla decisiva eventualmente torna sul punto
+  if(obj.includes(mb))R.spot.push(mb);if(scratch)return F('bianca in buca durante il push out');
+  R.opt='push';R.msg='Push out';return R}
+ // tiro normale
+ let foul=null;
+ if(!fc)foul='la bianca non ha colpito nessuna palla';
+ else if(gm==='otto'){
+  if(pre.on8&&fc!=='b8')foul='dovevi colpire prima la 8';
+  else if(!pre.on8&&pre.grp&&grpOf(fc)!==pre.grp)foul=`dovevi colpire prima una delle tue (${GRPN[pre.grp]})`;
+  else if(!pre.on8&&!pre.grp&&fc==='b8')foul='a tavolo aperto non si può colpire per prima la 8'}
+ else if(fc!==pre.low)foul=`dovevi colpire prima la palla più bassa, ${nm(pre.low)}`;
+ if(!foul&&pre.kitchen&&pre.xs[fc]<-pre.L/4)foul='con la palla in mano dietro la linea non puoi colpire per prima una palla dietro la linea';
+ if(!foul&&!rail)foul='dopo il contatto nessuna palla è andata in sponda o in buca';
+ if(!foul&&scratch)foul='bianca in buca';
+ if(gm==='otto'){
+  if(obj.includes('b8')){R.lose=true;
+   R.msg=foul?`La 8 è andata in buca con un fallo (${foul})`:!pre.on8?'La 8 è andata in buca prima di aver finito le tue palle':pre.call&&pk.b8!==pre.call.pk?'La 8 è andata in una buca diversa da quella chiamata':'';
+   if(!R.msg){R.lose=false;R.win=true;R.msg='La 8 nella buca chiamata: partita vinta!'}return R}
+  if(foul)return F(foul);
+  if(!pre.grp){const f=obj.find(x=>grpOf(x));if(f){R.assign=grpOf(f);R.cont=true;R.msg=`${obj.length} in buca: giochi con le ${GRPN[R.assign]}`}return R}
+  const mine=obj.filter(x=>grpOf(x)===pre.grp);R.cont=mine.length>0;R.msg=mine.length?`${mine.length} in buca`:obj.length?'Hai mandato in buca solo palle dell\'avversario':'';return R}
+ if(foul){if(obj.includes(mb))R.spot.push(mb);return F(foul)}
+ if(gm==='nove'){if(obj.includes('b9')){R.win=true;R.msg='La 9 in buca: partita vinta!';return R}R.cont=obj.length>0;R.msg=obj.length?`${obj.length} in buca`:'';return R}
+ // palla 10: conta solo la palla chiamata nella buca chiamata
+ const made=pre.call&&pk[pre.call.ball]===pre.call.pk;
+ if(made&&pre.call.ball==='b10'){R.win=true;R.msg='La 10 nella buca chiamata: partita vinta!';return R}
+ if(obj.includes('b10'))R.spot.push('b10');
+ if(made){R.cont=true;R.msg=`${nm(pre.call.ball)} nella buca chiamata`;return R}
+ if(obj.length){R.opt='call';R.msg='Palla chiamata non andata nella buca chiamata: le palle restano in buca, ma il turno passa'}
+ return R}
+function spotBall(S,id){const x0=S.L/4;   // punto di battuta in fondo; se è occupato, la palla va più indietro lungo la linea
+ const free=x=>S.balls.every(b=>Math.hypot(b.x-x,b.y)>2*BR+0.001);
+ let x=x0;for(let k=0;k<80;k++){const t=x0+k*0.004;if(t>S.L/2-BR-0.01)break;if(free(t)){x=t;break}const u=x0-k*0.004;if(free(u)){x=u;break}}
+ S.balls.push(mkBall(id,x,0))}
+
 // ---------- audio ----------
 let AC=null,nbuf=null;
 function ac(){if(!cfg.sound)return null;if(!AC){try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}if(AC.state==='suspended')AC.resume();return AC}
@@ -529,8 +645,9 @@ const sfx={
  cue(p){noise(0.03,0.2+0.4*p,2600,1.5);tone(700,0.04,0.12,'triangle',400)},
  good(){[523,659,784].forEach((f,i)=>setTimeout(()=>tone(f,0.18,0.12,'triangle'),i*90))},
  bad(){tone(220,0.25,0.12,'sawtooth',140)},
- win(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.3,0.14,'triangle'),i*130))}};
-function sndHook(k,v){if(k==='b')sfx.ball(v);else if(k==='c')sfx.cush(v);else sfx.pin()}
+ win(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.3,0.14,'triangle'),i*130))},
+ pocket(v){const k=Math.min(1,0.3+v/3);tone(95,0.22,0.35*k,'sine',55);setTimeout(()=>noise(0.09,0.18*k,700,1.5),60);setTimeout(()=>tone(140,0.08,0.12*k,'triangle',90),140)}};
+function sndHook(k,v){if(k==='b')sfx.ball(v);else if(k==='c')sfx.cush(v);else if(k==='k')sfx.pocket(v);else sfx.pin()}
 
 // ---------- modalità storia ----------
 const STORY=[
@@ -558,13 +675,42 @@ const STORY=[
   {name:'Vittoria Campionessa',emo:'🏆',lv:3,game:'italiana',target:50,say:'Sono arrivata fin qui senza sbagliare un calcio. Non comincerò oggi.'},
   {name:'Il Professore',emo:'🎓',lv:3,game:'goriziana',target:150,say:'Ho calcolato ogni traiettoria. La tua sconfitta è già scritta nelle formule.'},
   {name:'Maestro «Mano d\'Oro»',emo:'🥇',lv:3,game:'italiana',target:60,say:'Dicono che sia il migliore d\'Italia. Stasera lo scopriremo.'}]}];
-let story;try{story=JSON.parse(localStorage.getItem('sd-story')||'null')}catch(e){story=null}
+// storia del pool: a parte, con i suoi circuiti, i suoi minigiochi e le sue vite. target = partite da vincere
+const STORY_POOL=[
+ {name:'Sala giochi «Il Gettone»',ctx:'neon',table:'p7',opps:[
+  {name:'Kevin «Flipper»',emo:'🕹️',lv:0,game:'otto',target:1,say:'Di solito gioco al flipper, ma oggi mi sento fortunato. Spacchi tu o spacco io?'},
+  {name:'Zia Ornella',emo:'👵',lv:0,game:'nove',target:2,say:'Ho imparato a palla 9 in America, nel \'68. Le palle si mandano in buca in ordine, caro, come i piatti in lavastoviglie.'},
+  {name:'Bulldozer Brambilla',emo:'💪',lv:1,game:'otto',target:2,say:'Io spacco forte. Molto forte. Spero che il tavolo sia assicurato.'}]},
+ {name:'Pub «The Black Ball»',ctx:'pub',table:'p8',opps:[
+  {name:'Mister O\'Malley',emo:'🍀',lv:1,game:'otto',target:2,say:'In Irlanda la palla 8 si gioca con una pinta in mano. Qui ti concedo di posarla.'},
+  {name:'Molly la barista',emo:'🍺',lv:1,game:'nove',target:3,say:'Spillo birre e mando la 9 in buca con la stessa calma. Pronto?'},
+  {name:'Freccetta Fred',emo:'🎯',lv:1,game:'dieci',target:2,say:'Alle freccette chiamo il bersaglio. A palla 10 chiamo la buca. Mai sbagliato una chiamata… quasi.'}]},
+ {name:'Crociera nel Mediterraneo',ctx:'mare',table:'p8',opps:[
+  {name:'Il Pirata Barbagrigia',emo:'🏴‍☠️',lv:2,game:'otto',target:3,say:'Arrr! Sei buche come sei porti: ogni palla troverà il suo approdo.'},
+  {name:'Commodoro Lucchetti',emo:'⚓',lv:2,game:'nove',target:3,say:'A bordo della mia nave il tavolo è sempre in bolla, anche col mare grosso.'},
+  {name:'Lady Spritz',emo:'🍹',lv:2,game:'dieci',target:3,say:'Un tiro, un sorso. Chiamo la buca, poi chiamo il cameriere.'}]},
+ {name:'Torneo di Las Vegas',ctx:'neon',table:'p9',opps:[
+  {name:'Il Croupier',emo:'🎰',lv:2,game:'nove',target:4,say:'Il banco vince sempre. Stasera il banco sono io.'},
+  {name:'Il Re del Rock\'n\'Roll',emo:'🕺',lv:3,game:'otto',target:3,say:'Grazie, grazie mille. La 8 la chiamo nella buca d\'angolo, baby.'},
+  {name:'Lady Jackpot',emo:'💎',lv:3,game:'dieci',target:3,say:'Tre sette alla slot sono fortuna. Dieci palle in fila sono talento.'}]},
+ {name:'Campionato del Mondo',ctx:'torneo',table:'pnero',opps:[
+  {name:'Il Mago delle Sponde',emo:'🪄',lv:3,game:'nove',target:4,say:'Dicono che io faccia sparire le palle. In realtà le metto solo in buca.'},
+  {name:'The Machine',emo:'🤖',lv:3,game:'dieci',target:4,say:'Probabilità di vittoria calcolata: 97,3%. Ricalcolo dopo la spaccata.'},
+  {name:'Mister Break',emo:'👑',lv:3,game:'otto',target:4,say:'Campione del mondo in carica. Prima di batterti, ti stringo la mano.'}]}];
+const STORIES={it:STORY,pool:STORY_POOL},STORY_KEY={it:'sd-story',pool:'sd-pstory'};
+const SC=()=>STORIES[world()];
+let story;
 const LIVES=3;   // vite della storia: ogni sconfitta ne toglie una, a zero si ricomincia dal primo circuito
 const newStory=done=>({c:0,o:0,stage:'match',bonus:0,done:!!done,lives:LIVES});
-if(!story||typeof story.c!=='number')story=newStory();
-if(typeof story.lives!=='number')story.lives=LIVES;
+// ogni mondo ha la sua storia, salvata a parte
+function loadStory(){try{story=JSON.parse(localStorage.getItem(STORY_KEY[world()])||'null')}catch(e){story=null}
+ if(!story||typeof story.c!=='number'||story.c>=SC().length)story=newStory();
+ if(typeof story.lives!=='number')story.lives=LIVES}
 const hearts=()=>'❤️'.repeat(story.lives)+'🖤'.repeat(LIVES-story.lives);
-function saveStory(){try{localStorage.setItem('sd-story',JSON.stringify(story))}catch(e){}}
+function saveStory(){try{localStorage.setItem(STORY_KEY[world()],JSON.stringify(story))}catch(e){}}
+// se durante un incontro della storia si è cambiato mondo nel menu, si torna a quello dell'incontro
+function useWorld(w){if(world()!==w){cfg.world=w;saveCfg();loadStory()}}
+loadStory();
 
 // ---------- minigiochi ----------
 function cushBefore(ev,id,cond){let c=0;for(const e of ev){if(cond(e))return c;if(e.k==='c'&&e.a===id)c++}return c}
@@ -605,6 +751,63 @@ const MINIS=[
   judge(ev,S,M){if(ev.some(e=>e.k==='p'))return{ok:false,msg:'Hai abbattuto dei birilli'};const b=ballOf(S,'R1'),p=ballOf(S,'P'),d=Math.max(0,Math.hypot(b.x-p.x,b.y-p.y)-2*BR);
    return d<=M.need?{ok:true,msg:`Accosto a ${Math.round(d*100)} cm!`}:{ok:false,msg:`Ti sei fermato a ${Math.round(d*100)} cm`}}}];
 
+// minigiochi del pool. poolLine: palla a dO dalla buca pk e bianca a dC dalla palla, con un taglio di "cut" radianti
+const inT=(p,L,W,m=0.07)=>Math.abs(p[0])<L/2-m&&Math.abs(p[1])<W/2-m;
+function poolLine(R,L,W,pk,dO,cut,dC,spread){for(let k=0;k<60;k++){
+ const [px,py]=pocketXY(pk,L,W),s3=pk%3;const bx=s3===1?0:-Math.sign(px)/Math.SQRT2,by=s3===1?-Math.sign(py):-Math.sign(py)/Math.SQRT2;
+ const a0=Math.atan2(by,bx)+(R()-0.5)*(spread||(s3===1?0.9:0.6)),o=[px+Math.cos(a0)*dO,py+Math.sin(a0)*dO];
+ const ux=-Math.cos(a0),uy=-Math.sin(a0),gx=o[0]-ux*2*BR,gy=o[1]-uy*2*BR,ca=Math.atan2(uy,ux)+(R()<0.5?-1:1)*cut;
+ const c=[gx-Math.cos(ca)*dC,gy-Math.sin(ca)*dC];if(inT(o,L,W)&&inT(c,L,W))return{o,c,u:[ux,uy]};pk=(pk+1)%6}
+ return{o:[L/4,0],c:[-L/4,0],u:[1,0]}}
+const kOf=(ev,id)=>ev.find(e=>e.k==='k'&&e.a===id);
+const scr=ev=>ev.some(e=>e.k==='k'&&e.a==='c');
+const fcOf=ev=>{const e=ev.find(e=>e.k==='b'&&(e.a==='c'||e.b==='c'));return e?(e.a==='c'?e.b:e.a):null};
+function rackPos(rows,L){const s=2*BR+0.0004,dx=s*Math.sqrt(3)/2,P=[];rows.forEach((n,r)=>{for(let k=0;k<n;k++)P.push([L/4+r*dx,(k-(n-1)/2)*s])});return P}
+const MINIS_POOL=[
+ {id:'buca',name:'Buca chiamata',emo:'📣',pool:true,desc:'Manda la palla arancione nella buca segnata, senza mandare in buca la bianca.',
+  setup(lv,L,W,R){const pk=(R()*6)|0,s=poolLine(R,L,W,pk,0.25+R()*0.3+lv*0.05,lv*0.2,0.35+lv*0.1);return{balls:[['c',...s.c],['b5',...s.o]],pins:[],tries:3,pk:pocketOf(s.o,s.u,L,W)}},
+  goal(){return 'la 5 nella buca segnata'},
+  judge(ev,S,M){if(scr(ev))return{ok:false,msg:'La bianca è finita in buca'};const k=kOf(ev,'b5');if(!k)return{ok:false,msg:'La 5 non è entrata'};
+   return k.pk===M.pk?{ok:true,msg:'Dentro, proprio nella buca chiamata!'}:{ok:false,msg:'Entrata, ma nella buca sbagliata'}}},
+ {id:'spaccata',name:'Spaccata perfetta',emo:'💥',pool:true,brk:true,bih:'kitchen',desc:'Triangolo da palla 9: metti la bianca dietro la linea di battuta e spacca. Devi mandare in buca abbastanza palle, senza la bianca.',
+  setup(lv,L,W,R){const P=rackPos([1,2,3,2,1],L),ids=['b1','b2','b3','b4','b9','b5','b6','b7','b8'];return{balls:[['c',-L/4-0.1,(R()-0.5)*0.2],...P.map((p,i)=>[ids[i],p[0],p[1]])],pins:[],tries:3,need:[1,1,2,2,2][lv]}},
+  goal(M){return `almeno ${M.need} ${M.need>1?'palle':'palla'} in buca con la spaccata`},
+  judge(ev,S,M){if(scr(ev))return{ok:false,msg:'La bianca è finita in buca'};const n=ev.filter(e=>e.k==='k').length;
+   return n>=M.need?{ok:true,msg:`${n} in buca con la spaccata!`}:{ok:false,msg:`${n} in buca: ne servono ${M.need}`}}},
+ {id:'sponda',name:'Di sponda in buca',emo:'↩️',pool:true,desc:'La palla verde deve entrare in una buca qualsiasi dopo aver toccato almeno una sponda.',
+  setup(lv,L,W,R){const o=[(R()-0.5)*L*0.35,-W/2+0.2+R()*0.12],[px,py]=pocketAim(4,{L,W,pk:{cg:0}}),yr=-W/2+BR,P2=[px,2*yr-py];
+   let ux=P2[0]-o[0],uy=P2[1]-o[1];const d=Math.hypot(ux,uy);ux/=d;uy/=d;const ca=Math.atan2(uy,ux)+(R()<0.5?-1:1)*lv*0.12,dC=0.4+lv*0.08;
+   return{balls:[['c',o[0]-ux*2*BR-Math.cos(ca)*dC,o[1]-uy*2*BR-Math.sin(ca)*dC],['b6',...o]],pins:[],tries:3,pk:4}},
+  goal(){return 'la 6 in buca dopo una sponda'},
+  judge(ev){if(scr(ev))return{ok:false,msg:'La bianca è finita in buca'};const i=ev.findIndex(e=>e.k==='k'&&e.a==='b6');if(i<0)return{ok:false,msg:'La 6 non è entrata'};
+   return ev.slice(0,i).some(e=>e.k==='c'&&e.a==='b6')?{ok:true,msg:'Sponda e buca!'}:{ok:false,msg:'Entrata, ma senza toccare la sponda'}}},
+ {id:'combo',name:'Combinazione',emo:'🔗',pool:true,desc:'Colpisci la 1 e falle mandare in buca la 2: la bianca deve toccare per prima la 1.',
+  setup(lv,L,W,R){const pk=(R()*6)|0,s=poolLine(R,L,W,pk,0.2+R()*0.25,0,0.01,0.5),[ux,uy]=s.u,gb=[s.o[0]-ux*2*BR,s.o[1]-uy*2*BR];
+   const a=Math.atan2(uy,ux)+(R()<0.5?-1:1)*lv*0.07,dA=0.12+lv*0.05,A=[gb[0]-Math.cos(a)*dA,gb[1]-Math.sin(a)*dA];
+   const vx=Math.cos(a),vy=Math.sin(a),ga=[A[0]-vx*2*BR,A[1]-vy*2*BR],c2=a+(R()<0.5?-1:1)*lv*0.1,C=[ga[0]-Math.cos(c2)*0.35,ga[1]-Math.sin(c2)*0.35];
+   return{balls:[['c',...C],['b1',...A],['b2',...s.o]],pins:[],tries:3,pk:pocketOf(s.o,s.u,L,W)}},
+  goal(){return 'la 1 manda in buca la 2'},
+  judge(ev){if(scr(ev))return{ok:false,msg:'La bianca è finita in buca'};if(fcOf(ev)!=='b1')return{ok:false,msg:'La bianca deve toccare prima la 1'};
+   return kOf(ev,'b2')?{ok:true,msg:'Combinazione riuscita!'}:{ok:false,msg:'La 2 non è entrata'}}},
+ {id:'posizione',name:'Gioco di posizione',emo:'📍',pool:true,desc:'Manda in buca la viola e fai fermare la bianca dentro il bersaglio: è così che si prepara il tiro dopo.',
+  setup(lv,L,W,R){const pk=(R()*6)|0,s=poolLine(R,L,W,pk,0.25+R()*0.2,lv*0.12,0.4+lv*0.05);let t;
+   for(let k=0;k<40;k++){t={x:(R()-0.5)*L*0.6,y:(R()-0.5)*W*0.5,r:0.2-lv*0.025};if(Math.hypot(t.x-s.o[0],t.y-s.o[1])>0.4&&Math.hypot(t.x-s.c[0],t.y-s.c[1])>0.3)break}
+   return{balls:[['c',...s.c],['b4',...s.o]],pins:[],tries:3,target:t,pk:pocketOf(s.o,s.u,L,W)}},
+  goal(){return 'la 4 in buca e la bianca nel bersaglio'},
+  judge(ev,S,M){if(scr(ev))return{ok:false,msg:'La bianca è finita in buca'};if(!kOf(ev,'b4'))return{ok:false,msg:'La 4 non è entrata'};
+   const c=ballOf(S,'c'),d=Math.hypot(c.x-M.target.x,c.y-M.target.y);return d<=M.target.r?{ok:true,msg:'Buca e posizione perfette!'}:{ok:false,msg:`4 in buca, ma la bianca è fuori di ${Math.round((d-M.target.r)*100)} cm`}}},
+ {id:'sequenza',name:'In fila',emo:'🔢',pool:true,desc:'Manda in buca le palle in ordine, dalla più bassa, senza mai sbagliare: ogni tiro deve colpire per prima la palla più bassa e mandarla in buca.',
+  setup(lv,L,W,R){const n=[2,3,3,4,4][lv],B=[['c',-L*0.3,(R()-0.5)*W*0.4]];
+   for(let i=1;i<=n;i++){for(let k=0;k<80;k++){const p=[(R()-0.5)*(L-0.36),(R()-0.5)*(W-0.3)];if(B.every(b=>Math.hypot(b[1]-p[0],b[2]-p[1])>0.18)){B.push(['b'+i,...p]);break}}}
+   return{balls:B,pins:[],tries:3,need:n,seq:1}},
+  goal(M){return `manda in buca dalla 1 alla ${M.need}, in ordine`},
+  judge(ev,S,M){const lo='b'+M.seq;if(scr(ev))return{ok:false,msg:'La bianca è finita in buca'};if(fcOf(ev)!==lo)return{ok:false,msg:`Dovevi colpire prima la ${M.seq}`};
+   if(!kOf(ev,lo))return{ok:false,msg:`La ${M.seq} non è entrata`};
+   if(!S.balls.some(b=>b.id!=='c'))return{ok:true,msg:'Tutte in fila!'};M.seq=Math.min(...S.balls.filter(b=>b.id!=='c').map(b=>pnum(b.id)));return{ok:false,keep:true,msg:`Bene! Ora la ${M.seq}`}}}];
+// buca verso cui va una palla in o lungo la direzione u
+function pocketOf(o,u,L,W){let bi=0,bv=-2;for(let i=0;i<6;i++){const [x,y]=pocketXY(i,L,W),dx=x-o[0],dy=y-o[1],d=Math.hypot(dx,dy),v=(dx*u[0]+dy*u[1])/d;if(v>bv){bv=v;bi=i}}return bi}
+const MINIS_OF=()=>world()==='pool'?MINIS_POOL:MINIS;
+
 // ---------- stato ----------
 let G=null;
 const view={s:1,cx:0,cy:0,rot:false,w:0,h:0,dpr:1};
@@ -616,24 +819,25 @@ const meId=()=>G.bat||curP().ball;   // palla di chi tira (nelle boccette è la 
 const kindOf=g=>GAMES[g]?GAMES[g].kind:'mini';
 
 function newMatch(o){
- const T=TABLES[o.table];
+ const T=TABLES[o.table];setBR(T);
  G={mode:o.mode,game:o.game,vr:o.game==='goriziana'?(o.vr||'classica'):null,target:o.target,table:o.table,ctx:o.ctx,T,players:o.players,starter:o.starter||0,story:o.story||null,
-  sets:o.story?1:(o.sets||1),won:o.won||[0,0],setNo:o.setNo||1,
-  S:mkState(T.L,T.W,params(cfg.temp)),cur:0,phase:'idle',pred:null,ai:null,fast:false,lastPow:0.45,shot:null,pw:0,bat:null,hand:false};
+  sets:o.story||kindOf(o.game)==='pool'?1:(o.sets||1),won:o.won||[0,0],setNo:o.setNo||1,world:gWorld(o.game),
+  S:mkState(T.L,T.W,params(cfg.temp),T),cur:0,phase:'idle',pred:null,ai:null,fast:false,lastPow:0.45,shot:null,pw:0,bat:null,hand:false};
  const S=G.S,K=kindOf(G.game);S.pins=makePins(G.game);pinBox(S);
  const st=G.starter;G.cur=st;
+ if(K==='pool'){G.players.forEach(p=>p.ball='c');G.pool={rack:0};hideMenu();layout();return startRack()}
  if(K==='bocce'){G.players[0].ball='R';G.players[1].ball='W';G.hand=true;G.bb={placer:st,giocata:0};hideMenu();layout();hud();return startGiocata()}
- if(G.players[0].ball==='R'){G.players[0].ball='w';G.players[1].ball='y'}
+ if(G.players[0].ball==='R'||G.players[0].ball==='c'){G.players[0].ball='w';G.players[1].ball='y'}
  const sb=G.players[st].ball,ob=G.players[1-st].ball;
  if(K==='carom'){S.balls=[mkBall(sb,-T.L/4,0.1825*T.W/1.42),mkBall(ob,-T.L/4,0),mkBall('r',T.L/4,0)];G.bih=null}
  else{S.balls=[mkBall(sb,-T.L/4,0),mkBall(ob,T.L/2-0.10,0),mkBall('r',T.L/4,0)];G.bih={region:-1}}
  hideMenu();layout();hud();startTurn();
 }
 function newMini(def,lv,fromStory){
- const T=TABLES[fromStory?STORY[story.c].table:cfg.table];
- G={mode:'mini',game:'mini',table:fromStory?STORY[story.c].table:cfg.table,ctx:fromStory?STORY[story.c].ctx:cfg.ctx,T,
-  players:[{name:cfg.names[0],ball:def.ball?ck(def.ball):'w',score:0,cpu:null,shot:{a:0,b:0,el:5}}],cur:0,starter:0,
-  S:mkState(T.L,T.W,params(cfg.temp)),phase:'idle',pred:null,fast:false,lastPow:0.45,pw:0,story:fromStory,
+ const tk=fromStory?SC()[story.c].table:cfg[def.pool?'ptable':'table'],T=TABLES[tk];setBR(T);
+ G={mode:'mini',game:'mini',table:tk,ctx:fromStory?SC()[story.c].ctx:cfg.ctx,T,world:def.pool?'pool':'it',
+  players:[{name:cfg.names[0],ball:def.pool?'c':def.ball?ck(def.ball):'w',score:0,cpu:null,shot:{a:0,b:0,el:5}}],cur:0,starter:0,
+  S:mkState(T.L,T.W,params(cfg.temp),T),phase:'idle',pred:null,fast:false,lastPow:0.45,pw:0,story:fromStory,
   bat:def.hand?def.ball:null,hand:!!def.hand,mini:{def,lv,used:0}};
  const seed=(Math.random()*1e9)|0;G.mini.seed=seed;
  setupMini();hideMenu();layout();hud();
@@ -641,17 +845,88 @@ function newMini(def,lv,fromStory){
 }
 function goalTxt(){const M=G.mini;return M.def.goal?M.def.goal(M):M.def.desc}
 function setupMini(){const M=G.mini,S=G.S,T=G.T;const d=M.def.setup(M.lv,T.L,T.W,rng(M.seed));
- Object.assign(M,{tries:d.tries,need:d.need,target:d.target});
+ Object.assign(M,{tries:d.tries,need:d.need,target:d.target,pk:d.pk,seq:d.seq});
  S.balls=d.balls.map(([id,x,y])=>mkBall(id,x,y));
  if(M.def.hand)S.balls.push(mkBall(M.def.ball,-T.L/2+0.15,0));   // la boccia da lanciare, sulla sponda corta
- S.pins=(d.pins||[]).map(([x,y,k])=>({x,y,kind:k,down:false,fall:0,fa:0,off:false}));pinBox(S);G.bih=null}
+ S.pins=(d.pins||[]).map(([x,y,k])=>({x,y,kind:k,down:false,fall:0,fa:0,off:false}));pinBox(S);G.bih=M.def.bih?{region:M.def.bih}:null}
+
+// ---------- pool: flusso ----------
+// partita (rack): triangolo in fondo con la prima palla sul punto, bianca in mano dietro la linea di battuta; spacca a turno
+function startRack(){
+ const S=G.S,Q=G.pool,gm=G.game;Q.rack++;
+ const brk=(G.starter+Q.rack-1)%2;
+ let rows,ids;
+ if(gm==='otto'){rows=[1,2,3,4,5];const sol=[1,2,3,4,5,6,7].map(n=>'b'+n),str=[9,10,11,12,13,14,15].map(n=>'b'+n);shuffle(sol);shuffle(str);
+  // la 8 al centro della terza fila, negli angoli dietro una piena e una spezzata
+  const c1=sol.pop(),c2=str.pop(),rest=shuffle([...sol,...str]);ids=[];for(let i=0;i<15;i++)ids.push(i===4?'b8':i===10?c1:i===14?c2:rest.pop());}
+ else if(gm==='nove'){rows=[1,2,3,2,1];const r=shuffle([2,3,4,5,6,7,8].map(n=>'b'+n));ids=['b1',r[0],r[1],r[2],'b9',r[3],r[4],r[5],r[6]]}
+ else{rows=[1,2,3,4];const r=shuffle([2,3,4,5,6,7,8,9].map(n=>'b'+n));ids=['b1',r[0],r[1],r[2],'b10',r[3],r[4],r[5],r[6],r[7]]}
+ const P=rackPos(rows,S.L);S.balls=[mkBall('c',-S.L/4-0.12,(Math.random()-0.5)*0.25),...P.map((p,i)=>mkBall(ids[i],p[0]+(Math.random()-0.5)*1e-4,p[1]+(Math.random()-0.5)*1e-4))];
+ Object.assign(Q,{brk:true,grp:[null,null],fouls:[0,0],push:false,pushNow:false,call:null,callMan:false});
+ G.cur=brk;G.bih={region:'kitchen'};hud();
+ toast(`Partita ${Q.rack}: spacca ${curP().name}`,'gold');startTurn()}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+// situazione a inizio tiro, per le regole
+function poolPre(){const S=G.S,Q=G.pool,ids=S.balls.filter(b=>b.id!=='c').map(b=>b.id),low='b'+Math.min(...ids.map(pnum));
+ const grp=Q.grp[G.cur],on8=G.game==='otto'&&!Q.brk&&!!grp&&!ids.some(id=>grpOf(id)===grp);
+ const xs={};for(const b of S.balls)xs[b.id]=b.x;
+ return{brk:Q.brk,low,grp,on8,push:Q.pushNow,kitchen:Q.bihK,call:Q.call?{...Q.call}:null,xs,L:S.L}}
+// palla da colpire: serve per la mira iniziale, la chiamata e il computer
+function poolTargets(S,pre,me){const ids=S.balls.filter(b=>b.id!=='c').map(b=>b.id);if(!ids.length)return[];
+ if(G.game!=='otto'||pre.brk)return[pre.brk&&G.game==='otto'?apexId(S):'b'+Math.min(...ids.map(pnum))];
+ const grp=G.pool.grp[me];if(!grp)return ids.filter(id=>id!=='b8');const mine=ids.filter(id=>grpOf(id)===grp);return mine.length?mine:['b8']}
+function apexId(S){let bi=null,bd=1e9;for(const b of S.balls){if(b.id==='c')continue;const d=Math.hypot(b.x-S.L/4,b.y);if(d<bd){bd=d;bi=b.id}}return bi}
+// chiamata: nella palla 10 sempre (tranne la spaccata), nella palla 8 solo quando si tira la 8
+function needCall(){const Q=G.pool;if(!Q||Q.brk||Q.pushNow)return false;if(G.game==='dieci')return true;return G.game==='otto'&&poolPre().on8}
+function updCall(){const Q=G.pool;if(!Q||G.mode==='mini')return;if(!needCall()){Q.call=null;return}const S=G.S,c=ballOf(S,'c');if(!c)return;
+ const tg=G.game==='otto'?'b8':Q.call&&Q.callMan&&ballOf(S,Q.call.ball)?Q.call.ball:poolTargets(S,poolPre(),G.cur)[0],t=ballOf(S,tg);if(!t)return;
+ if(Q.call&&Q.call.ball===tg&&Q.pkMan)return;
+ // buca più in linea con il tiro: la palla va più o meno nella direzione bianca → palla
+ const ux=Math.cos(G.shot.ang),uy=Math.sin(G.shot.ang);let bi=0,bv=-9;
+ for(let i=0;i<6;i++){const [x,y]=pocketAim(i,S),dx=x-t.x,dy=y-t.y,d=Math.hypot(dx,dy),v=(dx*ux+dy*uy)/d-d*0.05;if(v>bv){bv=v;bi=i}}
+ Q.call={ball:tg,pk:bi}}
+function poolAfter(){
+ const S=G.S,Q=G.pool,pre=Q.pre,pl=curP();
+ const r=evalPool(G.game,S.ev,pre);
+ for(const id of r.spot)spotBall(S,id);
+ const wasBrk=Q.brk;Q.brk=false;Q.pushNow=false;Q.call=null;Q.callMan=false;Q.pkMan=false;
+ if(r.win||r.lose){if(r.win){toast(r.msg,'good')}else toast(r.msg,'bad');return rackEnd(r.win?G.cur:1-G.cur,r.msg)}
+ if(r.assign&&!Q.grp[G.cur]){Q.grp[G.cur]=r.assign;Q.grp[1-G.cur]=r.assign==='s'?'t':'s'}
+ // tre falli di fila (palla 9 e 10) fanno perdere la partita
+ if(r.foul){if(G.game!=='otto'){Q.fouls[G.cur]++;if(Q.fouls[G.cur]>=3)return rackEnd(1-G.cur,`${pl.name}: tre falli di fila`)}}else Q.fouls[G.cur]=0;
+ Q.push=!r.foul&&!pre.push&&wasBrk&&G.game!=='otto';   // push out: solo per il tiro subito dopo la spaccata
+ hud();
+ if(r.foul){toast(`Fallo: ${r.foul} · palla in mano a ${othP().name}`,'bad');sfx.bad();
+  if(!ballOf(S,'c'))S.balls.push(mkBall('c',-S.L/4-0.1,0));
+  G.cur=1-G.cur;G.bih={region:r.bihK?'kitchen':'any'};
+  if(Q.fouls[G.cur]===2&&G.game!=='otto')setTimeout(()=>toast(`Attenzione ${curP().name}: hai già due falli di fila, al terzo perdi la partita`,'bad'),900);
+  return startTurn()}
+ if(r.opt){G.cur=1-G.cur;return poolOption(r.opt,r.msg)}
+ if(r.cont){if(r.msg)toast(`${pl.name}: ${r.msg}`,'good');sfx.good();return startTurn()}
+ if(r.msg)toast(`${pl.name}: ${r.msg}`,'');
+ G.cur=1-G.cur;startTurn()}
+// scelte che il regolamento lascia a chi entra: dopo un push out, una chiamata sbagliata (palla 10), una spaccata non valida (palla 8)
+function poolOption(kind,msg){const me=curP(),op=othP();
+ const shoot=()=>startTurn(),back=()=>{G.cur=1-G.cur;startTurn()};
+ const rerack=b=>{G.pool.rack--;G.starter=((b-G.pool.rack)%2+2)%2;startRack()};
+ if(me.cpu!=null){toast(`${msg}: ${me.name} sceglie di tirare`,'gold');return shoot()}
+ if(kind==='rebreak')return card('Spaccata non valida',`<p>${msg}.</p><p><b>${me.name}</b>, puoi giocare la posizione così com'è, oppure si rimette il triangolo.</p>`,
+  [{t:'Gioco da qui',cls:'pri',fn:shoot},{t:'Rispacco io',fn:()=>rerack(G.cur)},{t:`Rispacca ${op.name}`,fn:()=>rerack(1-G.cur)}]);
+ card(kind==='push'?'Push out':'Chiamata sbagliata',`<p>${kind==='push'?`${op.name} ha fatto un push out.`:msg+'.'}</p><p><b>${me.name}</b>, tiri tu da questa posizione o fai tirare ancora ${op.name}?</p>`,
+  [{t:'Tiro io',cls:'pri',fn:shoot},{t:`Tira ${op.name}`,fn:back}])}
+function rackEnd(w,msg){setPhase('idle');const W=G.players[w],g0=G;W.score++;hud();sfx.win();
+ if(W.score>=G.target)return setTimeout(()=>{if(G===g0)endMatch()},1200);
+ const [p0,p1]=G.players;
+ setTimeout(()=>G===g0&&card(`Partita a ${W.name}`,`<div class="big">🎱</div><p>${msg}</p><div class="score2"><span>${p0.name} ${p0.score}</span><span>–</span><span>${p1.score} ${p1.name}</span></div><p class="sub">Si gioca alla corsa a ${G.target}.</p>`,
+  [{t:'Prossima partita ▸',cls:'pri',fn:()=>{if(G&&G.pool)startRack()}},{t:'Menu',fn:showMenu}]),900)}
 
 function resetPins(){const S=G.S;for(const p of S.pins){p.down=false;p.fall=0;p.off=false;
  for(const b of S.balls)if(Math.hypot(b.x-p.x,b.y-p.y)<BR+PR+0.001){p.down=true;p.off=true}}}
 
 function aimToward(){const S=G.S,me=ballOf(S,meId());let tx,ty;
  const P=ballOf(S,'P');
- if(G.mode==='mini'){const M=G.mini;if(M.target){tx=M.target.x;ty=M.target.y}else{const o=S.balls.find(b=>b.id!==me.id);tx=o.x;ty=o.y}}
+ if(G.pool){const t=ballOf(S,poolTargets(S,poolPre(),G.cur)[0]);if(t){tx=t.x;ty=t.y}else{tx=0;ty=0}}
+ else if(G.mode==='mini'){const M=G.mini;if(M.target&&!M.def.pool){tx=M.target.x;ty=M.target.y}else{const o=S.balls.find(b=>b.id!==me.id);tx=o.x;ty=o.y}}
  else if(P){tx=P.x;ty=P.y}
  else{const o=ballOf(S,othP().ball);tx=o.x;ty=o.y}
  return Math.atan2(ty-me.y,tx-me.x)}
@@ -662,10 +937,11 @@ function startTurn(){
  // lancio a mano: la boccia parte rotolando, nessun effetto; si sceglie da dove lanciare lungo la sponda corta
  if(G.hand){G.bih={region:'hand'};G.shot={ang:aimToward(),a:0,b:0.4,el:0,p:G.lastPow,hand:true}}
  else G.shot={ang:aimToward(),a:pl.shot.a,b:pl.shot.b,el:pl.shot.el,p:G.lastPow};
+ if(G.pool){const Q=G.pool;Q.bihK=!!(G.bih&&G.bih.region==='kitchen');Q.call=null;Q.callMan=false;Q.pkMan=false;Q.pushNow=false}
  hud();
  if(G.bih){const me=ballOf(G.S,meId());if(!validSpot(me.x,me.y,G.bih.region,me.id)){const s=findSpot(G.bih.region,me.id);me.x=s[0];me.y=s[1]}G.shot.ang=aimToward()}
  if(pl.cpu!=null){setPhase('cpu');cpuBegin();return}
- if(G.mode!=='mini')toast(`Tocca a ${pl.name}${G.hand?'':G.bih?' · palla in mano':''}`,'gold');
+ if(G.mode!=='mini')toast(`Tocca a ${pl.name}${G.hand?'':G.bih?' · palla in mano':''}${G.pool&&G.pool.push?' · puoi fare il push out':''}`,'gold');
  setPhase(G.bih?'place':'aim');
 }
 
@@ -711,8 +987,12 @@ function setPhase(ph){G.phase=ph;
  $('#dgAim').hidden=ph!=='aim';$('#dgPow').hidden=ph!=='power';$('#dgPlace').hidden=ph!=='place'&&ph!=='pallino';
  $('#dgWait').hidden=!['roll','cpu','cpuaim','settle'].includes(ph);
  $('#placeTxt').textContent=ph==='pallino'?'Trascina il pallino blu oltre la metà campo, dove vuoi bocciarlo':
-  G.hand?'Scegli da dove lanciare: trascina la boccia lungo la sponda corta in basso':'Palla in mano: trascina la tua palla nella zona illuminata';
+  G.hand?'Scegli da dove lanciare: trascina la boccia lungo la sponda corta in basso':G.bih&&G.bih.region==='kitchen'?'Palla in mano dietro la linea di battuta: trascina la bianca nella zona illuminata':
+  G.bih&&G.bih.region==='any'?'Palla in mano: puoi mettere la bianca dove vuoi':'Palla in mano: trascina la tua palla nella zona illuminata';
  $('#btnSpinMini').hidden=!!G.hand;
+ const Q=G.pool,hum=curP()&&curP().cpu==null;
+ $('#btnPush').hidden=!(Q&&Q.push&&hum);$('#btnPush').classList.toggle('sel',!!(Q&&Q.pushNow));
+ $('#btnCall').hidden=!(Q&&hum&&G.game==='dieci'&&!Q.brk&&!Q.pushNow);
  const sp=!!cfg.spinOpen&&!G.hand&&(ph==='aim'||ph==='power'),was=!$('#spinPanel').hidden;
  $('#spinPanel').hidden=!sp;$('#btnSpinMini').classList.toggle('sel',sp);
  if(sp)drawSpinUI();
@@ -731,8 +1011,10 @@ function shoot(){
  if(pl.cpu==null&&!G.hand)pl.shot={a:G.shot.a,b:G.shot.b,el:G.shot.el};
  if(kindOf(G.game)==='bocce'){   // per i tiri irregolari: si torna alla situazione di prima, senza la boccia lanciata
   G.snap=S.balls.filter(x=>x.id!==b.id).map(x=>({...x,M:x.M.slice()}));G.sx={};for(const x of S.balls)G.sx[x.id]=x.x}
- S.ev=[];S.snd=sndHook;S.t=0;strike(b,G.shot);sfx.cue(G.shot.p);
- G.cine=cineWindow(S);G.ts=1;
+ if(G.pool){G.pool.pre=poolPre();G.shot.brk=G.pool.brk;G.pool.push=false}
+ else G.shot.brk=!!(G.mini&&G.mini.def.brk);
+ S.ev=[];S.snd=sndHook;S.t=0;strike(b,G.shot);sfx.cue(G.shot.p*(G.shot.brk?1.4:1));
+ G.cine=S.pk?cinePool(S):cineWindow(S);G.ts=1;
  G.acc=0;G.pred=null;setPhase('roll');
 }
 function afterShot(){
@@ -740,6 +1022,7 @@ function afterShot(){
  if(G.mode==='mini')return miniJudge();
  const K=kindOf(G.game);
  if(K==='bocce')return bocceAfter();
+ if(K==='pool')return poolAfter();
  const me=curP().ball,op=othP().ball;
  const r=evalShot(G.game,S.ev,me,op,S.pins,G.vr);
  if(K==='carom'){   // carambola: chi fa punto continua a tirare
@@ -761,15 +1044,15 @@ function endMatch(){
  const [p0,p1]=G.players,w=p0.score>=p1.score?0:1,W=G.players[w];
  sfx.win();
  const sc=`<div class="score2"><span>${p0.name} ${p0.score}</span><span>–</span><span>${p1.score} ${p1.name}</span></div>`;
- if(G.mode==='story'){story.playing=false;
-  if(w===0){const last=story.c===STORY.length-1&&story.o===STORY[story.c].opps.length-1;
+ if(G.mode==='story'){useWorld(G.world);story.playing=false;const pool=G.world==='pool',ST=SC();
+  if(w===0){const last=story.c===ST.length-1&&story.o===ST[story.c].opps.length-1;
    if(last){story=newStory(true);saveStory();
-    return card('Campione d\'Italia!',`<div class="big">🏆</div>${sc}<p>Hai battuto tutti, dal Bar Sport al Gran Premio. La Stecca d'Oro è tua!</p>`,[{t:'Menu',cls:'pri',fn:showMenu}])}
+    return card(pool?'Campione del mondo!':'Campione d\'Italia!',`<div class="big">🏆</div>${sc}<p>${pool?'Dalla sala giochi al Campionato del Mondo: hai battuto tutti. Sei il re delle buche!':'Hai battuto tutti, dal Bar Sport al Gran Premio. La Stecca d\'Oro è tua!'}</p>`,[{t:'Menu',cls:'pri',fn:showMenu}])}
    story.stage='mini';saveStory();
-   return card('Vittoria!',`<div class="big">🎉</div>${sc}<p>Prima del prossimo incontro c'è una sfida: se la superi parti con dei punti di vantaggio.</p>`,[{t:'Alla sfida ▸',cls:'pri',fn:storyMini},{t:'Menu',fn:showMenu}])}
+   return card('Vittoria!',`<div class="big">🎉</div>${sc}<p>Prima del prossimo incontro c'è una sfida: ${pool?'se la superi spacchi tu la prima partita':'se la superi parti con dei punti di vantaggio'}.</p>`,[{t:'Alla sfida ▸',cls:'pri',fn:storyMini},{t:'Menu',fn:showMenu}])}
   story.lives--;
   if(story.lives<=0){const was=story.done;story=newStory(was);saveStory();
-   return card('Partita finita',`<div class="big">💔</div>${sc}<p>${G.players[1].name} ha vinto e hai finito le vite. La storia ricomincia dal Bar Sport di Borgo Vecchio, con ${LIVES} vite nuove.</p>`,[{t:'Ricomincia ▸',cls:'pri',fn:storyMatch},{t:'Menu',fn:showMenu}])}
+   return card('Partita finita',`<div class="big">💔</div>${sc}<p>${G.players[1].name} ha vinto e hai finito le vite. La storia ricomincia da ${ST[0].name}, con ${LIVES} vite nuove.</p>`,[{t:'Ricomincia ▸',cls:'pri',fn:storyMatch},{t:'Menu',fn:showMenu}])}
   saveStory();
   return card('Sconfitta',`<div class="big">😤</div>${sc}<p>${G.players[1].name} ha vinto questa volta. Hai perso una vita: te ne rimangono <b>${story.lives}</b> ${hearts()}</p>`,[{t:'Riprova',cls:'pri',fn:storyMatch},{t:'Menu',fn:showMenu}])}
  const again=(won,setNo,starter)=>{const pl=G.players.map(p=>({...p,score:0}));newMatch({mode:G.mode,game:G.game,vr:G.vr,target:G.target,table:G.table,ctx:G.ctx,players:pl,starter,sets:G.sets,won,setNo})};
@@ -778,60 +1061,81 @@ function endMatch(){
   return card(`Vince ${W.name}!`,`<div class="big">🏆</div>${sc}${ws}`,[{t:'Rivincita',cls:'pri',fn:()=>again([0,0],1,1-G.starter)},{t:'Menu',fn:showMenu}])}
  card(`Vince ${W.name}!`,`<div class="big">🏆</div>${sc}`,[{t:'Rivincita',cls:'pri',fn:()=>again([0,0],1,1-G.starter)},{t:'Menu',fn:showMenu}]);
 }
-function miniJudge(){const M=G.mini,r=M.def.judge(G.S.ev,G.S,M);M.used++;
+function miniJudge(){const M=G.mini,r=M.def.judge(G.S.ev,G.S,M);
+ if(r.keep){toast(r.msg,'good');sfx.good();return startTurn()}   // sfide a più tiri: si continua dalla posizione raggiunta
+ M.used++;
  if(r.ok){sfx.win();return setTimeout(()=>miniEnd(true,r.msg),500)}
  sfx.bad();
  if(M.used>=M.tries)return setTimeout(()=>miniEnd(false,r.msg),500);
  const left=M.tries-M.used;toast(`${r.msg} — ${left===1?'ultimo tentativo':`ancora ${left} tentativi`}`,'bad');
  setupMini();startTurn();}
 function miniEnd(ok,msg){setPhase('idle');const M=G.mini;
- if(G.story){const nx=nextOpp(),bonus=ok?Math.round(nx.target*0.15):0;story.bonus=bonus;advanceStory();saveStory();
-  return card(ok?'Sfida superata!':'Sfida fallita',`<div class="big">${ok?'⭐':'💨'}</div><p>${msg}.</p><p>${ok?`Partirai con <b>${bonus} punti</b> di vantaggio contro ${nx.name}.`:`Niente vantaggio contro ${nx.name}: si parte da zero.`}</p>`,[{t:'Prossimo incontro ▸',cls:'pri',fn:storyMatch},{t:'Menu',fn:showMenu}])}
+ if(G.story){useWorld(G.world);const nx=nextOpp(),pool=G.world==='pool';
+  // nel pool il premio è la prima spaccata (bonus 1); se la sfida fallisce spacca l'avversario (−1)
+  const bonus=pool?(ok?1:-1):ok?Math.round(nx.target*0.15):0;story.bonus=bonus;advanceStory();saveStory();
+  const txt=pool?(ok?`Contro ${nx.name} spaccherai tu la prima partita.`:`Contro ${nx.name} la prima partita la spacca lui.`):ok?`Partirai con <b>${bonus} punti</b> di vantaggio contro ${nx.name}.`:`Niente vantaggio contro ${nx.name}: si parte da zero.`;
+  return card(ok?'Sfida superata!':'Sfida fallita',`<div class="big">${ok?'⭐':'💨'}</div><p>${msg}.</p><p>${txt}</p>`,[{t:'Prossimo incontro ▸',cls:'pri',fn:storyMatch},{t:'Menu',fn:showMenu}])}
  card(ok?'Sfida superata!':'Sfida fallita',`<div class="big">${ok?'⭐':'💨'}</div><p>${msg}.</p>`,[{t:'Riprova',cls:'pri',fn:()=>newMini(M.def,M.lv,false)},...(ok&&M.lv<4?[{t:'Livello successivo',fn:()=>{cfg.miniLv=M.lv+1;saveCfg();newMini(M.def,M.lv+1,false)}}]:[]),{t:'Menu',fn:showMenu}])}
 
 // ---------- storia: flusso ----------
-function nextOpp(){let c=story.c,o=story.o+1;if(o>=STORY[c].opps.length){c++;o=0}return STORY[Math.min(c,STORY.length-1)].opps[o]||STORY[c].opps[0]}
-function advanceStory(){story.o++;if(story.o>=STORY[story.c].opps.length){story.c++;story.o=0}story.stage='match'}
+function nextOpp(){const ST=SC();let c=story.c,o=story.o+1;if(o>=ST[c].opps.length){c++;o=0}return ST[Math.min(c,ST.length-1)].opps[o]||ST[c].opps[0]}
+function advanceStory(){story.o++;if(story.o>=SC()[story.c].opps.length){story.c++;story.o=0}story.stage='match'}
 function storyMatch(){
  // un incontro lasciato a metà (tornando al menu) conta come sconfitta: niente ripetizioni gratis
  let note='';
  if(story.playing){story.playing=false;story.lives--;
   if(story.lives<=0){story=newStory(story.done);note=`<p class="say">Hai abbandonato l'incontro e hai finito le vite: si ricomincia dal primo circuito.</p>`}
   else note=`<p class="say">Hai abbandonato l'incontro precedente: conta come sconfitta, −1 vita.</p>`;saveStory()}
- const C=STORY[story.c],O=C.opps[story.o];
+ const C=SC()[story.c],O=C.opps[story.o],pool=world()==='pool';
+ const what=pool?`${GAMES[O.game].name}, alla corsa a <b>${O.target}</b> ${O.target>1?'partite':'partita'}${story.bonus>0?' · spacchi tu la prima':story.bonus<0?` · la prima la spacca ${O.name}`:''}`
+  :`${GAMES[O.game].name} ai <b>${O.target}</b> punti${story.bonus?` · parti con <b>+${story.bonus}</b>`:''}`;
  card(`${O.emo} ${O.name}`,`${note}<p style="color:var(--mute);margin:0">${C.name} · incontro ${story.o+1} di ${C.opps.length} · vite ${hearts()}</p><div class="say">«${O.say}»</div>
-  <p>${GAMES[O.game].name} ai <b>${O.target}</b> punti${story.bonus?` · parti con <b>+${story.bonus}</b>`:''}.</p>`,
-  [{t:'Gioca ▸',cls:'pri',fn:()=>{story.playing=true;saveStory();newMatch({mode:'story',game:O.game,target:O.target,table:C.table,ctx:C.ctx,story:true,starter:0,
-   players:[{name:cfg.names[0]||'Tu',ball:'w',score:story.bonus||0,cpu:null},{name:O.name,ball:'y',score:0,cpu:O.lv,emo:O.emo}]})}},{t:'Menu',fn:showMenu}]);
+  <p>${what}.</p>`,
+  [{t:'Gioca ▸',cls:'pri',fn:()=>{story.playing=true;saveStory();newMatch({mode:'story',game:O.game,target:O.target,table:C.table,ctx:C.ctx,story:true,starter:pool&&story.bonus<0?1:0,
+   players:[{name:cfg.names[0]||'Tu',ball:'w',score:pool?0:story.bonus||0,cpu:null},{name:O.name,ball:'y',score:0,cpu:O.lv,emo:O.emo}]})}},{t:'Menu',fn:showMenu}]);
 }
-function storyMini(){const def=MINIS[(story.c*3+story.o)%MINIS.length];newMini(def,Math.min(4,story.c),true)}
+function storyMini(){const MS=MINIS_OF(),def=MS[(story.c*3+story.o)%MS.length];newMini(def,Math.min(4,story.c),true)}
 
 // ---------- palla in mano ----------
 function validSpot(x,y,region,id){const S=G.S;
  if(Math.abs(x)>S.L/2-BR||Math.abs(y)>S.W/2-BR)return false;
  if(region==='hand'){if(x>-S.L/2+HANDZ)return false}
- else if(region&&x*region<BR)return false;
+ else if(region==='kitchen'){if(x>-S.L/4)return false}
+ else if(typeof region==='number'&&x*region<BR)return false;
+ // pool: non nella bocca di una buca
+ if(S.pk&&(Math.abs(x)+Math.abs(y)-(S.L+S.W)/2>-S.pk.cg-BR||(Math.abs(x)<S.pk.sg+BR&&Math.abs(y)>S.W/2-2*BR)))return false;
  for(const b of S.balls)if(b.id!==id&&Math.hypot(b.x-x,b.y-y)<2*BR+0.002)return false;
  for(const p of S.pins)if(!p.down&&Math.hypot(p.x-x,p.y-y)<BR+PR+0.003)return false;
  return true}
-function findSpot(region,id){const S=G.S;for(let k=0;k<400;k++){const x=region==='hand'?-S.L/2+BR+Math.random()*(HANDZ-BR):region*(BR+Math.random()*(S.L/2-2*BR)),y=(Math.random()-0.5)*(S.W-2*BR);if(validSpot(x,y,region,id))return[x,y]}return[region*S.L/4,S.W/4]}
+function findSpot(region,id){const S=G.S;for(let k=0;k<400;k++){const x=region==='hand'?-S.L/2+BR+Math.random()*(HANDZ-BR):region==='kitchen'?-S.L/2+BR+Math.random()*(S.L/4-BR):region==='any'?(Math.random()-0.5)*(S.L-2*BR):region*(BR+Math.random()*(S.L/2-2*BR)),y=(Math.random()-0.5)*(S.W-2*BR);if(validSpot(x,y,region,id))return[x,y]}
+ return typeof region==='number'?[region*S.L/4,S.W/4]:[-S.L/4-0.1,0]}
 
 // ---------- colpo guidato ----------
 function predict(){
  const S=cloneS(G.S);S.ev=[];const me=meId(),cb=ballOf(S,me);
  strike(cb,G.shot);
  const paths={};for(const b of S.balls)paths[b.id]=[[b.x,b.y]];
- let ci=-1,ghost=null,first=null,cush=[],en=0;const pins=new Set();
+ let ci=-1,ghost=null,first=null,cush=[],en=0;const pins=new Set(),pots=[];
  const full=cfg.guide===2,max=(full?20:8)/DT;
  for(let n=0;n<max;n++){step(S);
   while(en<S.ev.length){const e=S.ev[en++];
    if(e.k==='b'&&ci<0&&(e.a===me||e.b===me)){paths[me].push([cb.x,cb.y]);ci=paths[me].length-1;ghost=[cb.x,cb.y];first=e.a===me?e.b:e.a}
    else if(e.k==='c'&&e.a===me){paths[me].push([cb.x,cb.y]);if(ci<0)cush.push(paths[me].length-1)}
-   else if(e.k==='p')pins.add(e.p)}
+   else if(e.k==='p')pins.add(e.p);else if(e.k==='k')pots.push(e.a)}
   for(const b of S.balls){const P=paths[b.id],l=P[P.length-1];if((b.x-l[0])**2+(b.y-l[1])**2>1e-4)P.push([b.x,b.y])}
   if(!full&&ci>=0&&n%40===0){let ok=true;for(const b of S.balls){const P=paths[b.id];if(P.length>1&&plen(P,b.id===me?ci:0)<0.4&&mov(b))ok=false}if(ok)break}
   if(n%10===0&&allStopped(S))break}
- return{paths,ci,ghost,first,cush,pins,end:S.balls.map(b=>({id:b.id,x:b.x,y:b.y}))}}
+ return{paths,ci,ghost,first,cush,pins,pots,end:S.balls.map(b=>({id:b.id,x:b.x,y:b.y}))}}
+// pool: rallentatore quando la palla decisiva (8, 9 o 10) passa vicino a una buca
+function cinePool(S){if(!cfg.slowmo)return null;const id=G.pool?GAMES[G.game].money:null;if(!id||!ballOf(S,id))return null;
+ const C=cloneS(S);C.ev=[];const near=0.16;let t0=-1,t1=-1,fx=0,fy=0,hit=false;
+ for(let i=0;i<20/DT;i++){step(C);const b=ballOf(C,id);
+  if(!b){if(t0>=0){hit=true;t1=C.t}break}
+  if(b.vx||b.vy)for(let k=0;k<6;k++){const [x,y]=pocketXY(k,C.L,C.W);if(Math.hypot(b.x-x,b.y-y)<near){if(t0<0){t0=C.t;fx=x*0.85;fy=y*0.85}t1=C.t}}
+  if(i%16===0&&allStopped(C))break}
+ if(t0<0)return null;
+ const z=clamp(Math.min(view.w,view.h)/(0.7*view.s),1,3.2),n=pnum(id);
+ return{t0:Math.max(0,t0-0.45),t1:t1+0.5,fx,fy,z,hit,said:false,txt:hit?`🎱 La ${n} va verso la buca…`:`La ${n} sfiora la buca…`}}
 // rallentatore: simula il tiro appena partito e trova quando una palla arriva vicino ai birilli in piedi
 function cineWindow(S){
  // solo il birillo rosso (centrale) fa scattare il rallentatore
@@ -856,6 +1160,7 @@ const SPINS=[[0,0.1,6],[0,0.4,6],[0,-0.4,6],[0.35,0.15,6],[-0.35,0.15,6]];
 function cpuBegin(){
  const pl=curP(),L=AI_LV[pl.cpu],S=G.S;
  if(G.hand)return cpuBocce();
+ if(G.pool)return cpuPool();
  if(G.bih){const s=cpuPlace();const me=ballOf(S,pl.ball);me.x=s[0];me.y=s[1];G.bih=null}
  const C=ballOf(S,pl.ball),list=[],carom=kindOf(G.game)==='carom';
  // nella carambola si mira a entrambe le palle; altrimenti alla palla avversaria
@@ -865,7 +1170,7 @@ function cpuBegin(){
  for(let k=0;k<nb;k++){const ang=k*Math.PI*2/nb+Math.random()*0.01;for(const p of L.bpows)list.push({ang,a:0,b:0.2,el:6,p});if(pl.cpu>=2&&k%2===0)list.push({ang,a:(k%4?0.35:-0.35),b:0.2,el:6,p:0.6})}
  G.ai={list,i:0,top:[],me:pl.ball,op:othP().ball,lv:pl.cpu,t0:performance.now()};
 }
-function aiValue(sh,A){const S=cloneS(G.S);S.ev=[];
+function aiValue(sh,A){if(A.pool)return aiPoolValue(sh,A);const S=cloneS(G.S);S.ev=[];
  if(A.bocce){const b=ballOf(S,A.me);b.x=sh.rx;b.y=sh.ry;strike(b,sh)}else strike(ballOf(S,A.me),sh);
  for(let n=0;n<14/DT;n++){step(S);if(n%16===0&&allStopped(S))break}
  if(A.bocce){const r=evalBocce(S.ev,A.me,A.col,A.sx,A.first,S.pins);let v=r.irr?-r.opp-4:r.pts-r.opp;
@@ -893,10 +1198,63 @@ function aiWork(ms){const A=G.ai;if(!A)return;const t0=performance.now();
  if(!A.rob){A.top.sort((a,b)=>b.v-a.v);A.rob=A.top.slice(0,A.lv>=2?4:1);A.ri=0;if(A.lv<2){A.done=A.rob[0];}}
  while(!A.done&&A.ri<A.rob.length&&performance.now()-t0<ms){const c=A.rob[A.ri++];let s=c.v;for(const da of [-0.004,0.004])s+=aiValue({...c.sh,ang:c.sh.ang+da},A);c.r=s/3}
  if(!A.done&&A.ri>=A.rob.length){A.rob.sort((a,b)=>b.r-a.r);A.done=A.rob[0]}
- if(A.done&&performance.now()-A.t0>700){const L=AI_LV[A.lv],sh={...A.done.sh};
-  sh.ang+=gauss()*L.angN*Math.PI/180;sh.p=clamp(sh.p*(1+gauss()*L.powN),0.05,1);
+ if(A.done&&performance.now()-A.t0>700){const L=A.pool?POOL_AI[A.lv]:AI_LV[A.lv],sh={...A.done.sh};
+  sh.ang+=gauss()*L.angN*Math.PI/180*(sh.brk?2:1);sh.p=clamp(sh.p*(1+gauss()*L.powN),0.05,1);
   if(A.bocce){const b=ballOf(G.S,A.me);b.x=sh.rx;b.y=sh.ry;G.bih=null}
+  if(A.pool){if(sh.cx!=null){const b=ballOf(G.S,'c');b.x=sh.cx;b.y=sh.cy}G.bih=null;G.pool.call=sh.call||null}
   G.ai=null;G.cpuT={from:G.shot.ang,to:sh.ang,sh,t:0};G.shot={...G.shot,a:sh.a,b:sh.b,el:sh.el};setPhase('cpuaim')}}
+// pool: tiri candidati = per ogni palla da colpire e ogni buca, la "palla fantasma" da centrare; più potenze ed effetti.
+// Con palla in mano prova alcune posizioni della bianca. Ogni candidato viene simulato e valutato con le regole vere.
+const POOL_AI=[{tp:3,pows:[0.35,0.6],spins:1,spots:2,angN:1.3,powN:0.08},{tp:5,pows:[0.3,0.5,0.75],spins:2,spots:3,angN:0.65,powN:0.05},
+ {tp:7,pows:[0.25,0.4,0.6,0.85],spins:3,spots:4,angN:0.28,powN:0.025},{tp:9,pows:[0.22,0.35,0.5,0.7,0.9],spins:5,spots:5,angN:0.1,powN:0.01}];
+const PSPINS=[[0,0.05,4],[0,0.4,4],[0,-0.45,4],[0.3,0.1,4],[-0.3,0.1,4]];
+// facilità di un tiro diretto bianca → palla t → buca i (0 = impossibile o coperto)
+function potEase(S,cx,cy,t,i){const [px,py]=pocketAim(i,S);let ux=px-t.x,uy=py-t.y;const d2=Math.hypot(ux,uy);ux/=d2;uy/=d2;
+ const gx=t.x-ux*2*BR,gy=t.y-uy*2*BR;let vx=gx-cx,vy=gy-cy;const d1=Math.hypot(vx,vy);if(d1<1e-3)return 0;vx/=d1;vy/=d1;
+ const ct=vx*ux+vy*uy;if(ct<0.2)return 0;
+ if(i%3===1&&Math.abs(uy)<0.5)return 0;   // nelle buche centrali si entra solo abbastanza dritti
+ const blk=(ax,ay,bx,by,skip)=>{const lx=bx-ax,ly=by-ay,l2=lx*lx+ly*ly;for(const b of S.balls){if(skip.includes(b.id))continue;let k=((b.x-ax)*lx+(b.y-ay)*ly)/l2;if(k<=0||k>=1)continue;if(Math.hypot(ax+lx*k-b.x,ay+ly*k-b.y)<2*BR*0.98)return true}return false};
+ if(blk(cx,cy,gx,gy,['c',t.id])||blk(t.x,t.y,px,py,['c',t.id]))return 0;
+ return ct*ct/(1+0.5*(d1+d2))}
+function bestEase(S,ids,cx,cy){let best=0,bt=null,bp=0;for(const id of ids){const t=ballOf(S,id);if(!t)continue;for(let i=0;i<6;i++){const e=potEase(S,cx,cy,t,i);if(e>best){best=e;bt=id;bp=i}}}return{e:best,t:bt,p:bp}}
+function cpuPool(){
+ const S=G.S,pl=curP(),lv=pl.cpu,Q=G.pool,PL=POOL_AI[lv],list=[],pre=poolPre(),cue=ballOf(S,'c');
+ if(Q.brk){   // spaccata: bianca dietro la linea, piena potenza sulla prima palla
+  const ap=ballOf(S,apexId(S));for(const y of [0,0.12,-0.12]){const cx=-S.L/4-0.1,cy=y;if(!validSpot(cx,cy,'kitchen','c'))continue;
+   const base=Math.atan2(ap.y-cy,ap.x-cx);for(const da of [-0.004,0,0.004])list.push({ang:base+da,a:0,b:-0.15,el:4,p:1,brk:true,cx,cy})}}
+ else{
+  let spots=[[cue.x,cue.y]];
+  if(G.bih){const reg=G.bih.region,tg=poolTargets(S,pre,G.cur),c=[];
+   for(let k=0;k<60;k++){const s=findSpot(reg,'c');c.push({s,e:bestEase(S,tg,s[0],s[1]).e+Math.random()*0.02})}
+   c.sort((a,b)=>b.e-a.e);spots=c.slice(0,PL.spots).map(x=>x.s)}
+  const tg=poolTargets(S,pre,G.cur);
+  for(const [cx,cy] of spots){const cand=[];
+   for(const id of tg){const t=ballOf(S,id);if(!t)continue;for(let i=0;i<6;i++){const e=potEase(S,cx,cy,t,i);if(e>0)cand.push({id,i,e})}}
+   cand.sort((a,b)=>b.e-a.e);
+   for(const c of cand.slice(0,PL.tp)){const t=ballOf(S,c.id),[px,py]=pocketAim(c.i,S),d=Math.hypot(px-t.x,py-t.y),gx=t.x-(px-t.x)/d*2*BR,gy=t.y-(py-t.y)/d*2*BR,ang=Math.atan2(gy-cy,gx-cx);
+    const call=G.game==='dieci'||(G.game==='otto'&&pre.on8)?{ball:c.id,pk:c.i}:null;
+    for(const p of PL.pows)for(let s=0;s<PL.spins;s++){const sp=PSPINS[s];list.push({ang,a:sp[0],b:sp[1],el:sp[2],p,cx,cy,call})}}
+   // difese: tocchi leggeri sulla palla da colpire, per lasciarla difficile all'avversario
+   for(const id of tg.slice(0,3)){const t=ballOf(S,id);if(!t)continue;const d=Math.hypot(t.x-cx,t.y-cy),base=Math.atan2(t.y-cy,t.x-cx);
+    for(const cut of [-0.7,-0.35,0.35,0.7])for(const p of [0.2,0.35])list.push({ang:base+Math.asin(clamp(cut*2*BR/d,-1,1)),a:0,b:0,el:4,p,cx,cy,call:G.game==='dieci'?{ball:id,pk:0}:null})}}}
+ if(!list.length)list.push({ang:G.shot.ang,a:0,b:0,el:4,p:0.5});
+ G.ai={list,i:0,top:[],pool:true,pre,me:G.cur,lv,t0:performance.now()}}
+function aiPoolValue(sh,A){const S=cloneS(G.S);S.ev=[];const c=ballOf(S,'c');if(!c)return -99;if(sh.cx!=null){c.x=sh.cx;c.y=sh.cy}
+ strike(c,sh);for(let n=0;n<12/DT;n++){step(S);if(n%16===0&&allStopped(S))break}
+ const pre={...A.pre,call:sh.call||null,kitchen:A.pre.kitchen&&sh.cx!=null};
+ const r=evalPool(G.game,S.ev,pre);
+ if(r.win)return 100;if(r.lose)return -100;if(r.foul)return -12;
+ for(const id of r.spot)if(!ballOf(S,id))S.balls.push(mkBall(id,S.L/4,0));
+ const cb=ballOf(S,'c');if(!cb)return -12;
+ // chi tira dopo, e quanto è facile il suo prossimo tiro
+ const me=A.me,nx=r.cont?me:1-me,grp=G.pool.grp.slice();if(r.assign&&!grp[me]){grp[me]=r.assign;grp[1-me]=r.assign==='s'?'t':'s'}
+ const ids=S.balls.filter(b=>b.id!=='c').map(b=>b.id);if(!ids.length)return 50;
+ let tg;if(G.game!=='otto')tg=['b'+Math.min(...ids.map(pnum))];else{const g=grp[nx];tg=g?ids.filter(id=>grpOf(id)===g):ids.filter(id=>id!=='b8');if(!tg.length)tg=['b8']}
+ const e=bestEase(S,tg,cb.x,cb.y).e;
+ let v=r.cont?12+16*e:-14*e;
+ if(G.game==='otto'){const mine=r.pots.filter(x=>grpOf(x)===(grp[me]||'x')).length,their=r.pots.filter(x=>grp[me]&&grpOf(x)&&grpOf(x)!==grp[me]).length;v+=mine*1.5-their*1.5}
+ if(r.opt)v-=2;
+ return v-sh.p*0.3}
 function cpuPlace(){const S=G.S,me=curP().ball,O=ballOf(S,othP().ball),reg=G.bih.region;let best=null,bv=-1e9;
  for(let k=0;k<60;k++){const s=findSpot(reg,me),d=Math.hypot(O.x-s[0],O.y-s[1]);let v=-Math.abs(d-0.6)+Math.random()*0.1;
   const ux=(O.x-s[0])/d,uy=(O.y-s[1])/d;
@@ -909,7 +1267,7 @@ function cpuPlace(){const S=G.S,me=curP().ball,O=ballOf(S,othP().ball),reg=G.bih
 function layout(){
  const r=stage.getBoundingClientRect();view.w=r.width;view.h=r.height;view.dpr=Math.min(2,window.devicePixelRatio||1);
  cv.width=Math.round(view.w*view.dpr);cv.height=Math.round(view.h*view.dpr);
- const T=G?G.T:TABLES[cfg.table],EW=T.L+2*EXT,EH=T.W+2*EXT;
+ const T=G?G.T:TABLES[cfg[TK()]],EW=T.L+2*EXT,EH=T.W+2*EXT;
  // spazio libero per il tavolo: se il pannello dell'effetto è aperto, il tavolo gli lascia posto
  let aw=view.w,ah=view.h;const sp=$('#spinPanel');
  if(!sp.hidden){const pr=sp.getBoundingClientRect();if(pr.left-r.left>view.w*0.4)aw=pr.left-r.left-4;else ah=pr.top-r.top-4}
@@ -927,7 +1285,7 @@ function toWorld(sx,sy){const v=cam();return view.rot?[(v.cy-sy)/v.s,(v.cx-sx)/v
 let clothPat=null;
 function buildStatic(){
  stat.width=cv.width;stat.height=cv.height;const c=stat.getContext('2d');
- const T=G?G.T:TABLES[cfg.table],X=CTXS[G?G.ctx:cfg.ctx],L=T.L,W=T.W;
+ const T=G?G.T:TABLES[cfg[TK()]],X=CTXS[G?G.ctx:cfg.ctx],L=T.L,W=T.W;
  c.setTransform(view.dpr,0,0,view.dpr,0,0);X.draw(c,view.w,view.h,rng(7));
  worldTf(c,true);
  // ombra e cornice in legno
@@ -949,18 +1307,53 @@ function buildStatic(){
  const sg=c.createLinearGradient(0,-W/2,0,-W/2+0.06);sg.addColorStop(0,'rgba(0,0,0,.35)');sg.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=sg;c.fillRect(-L/2,-W/2,L,0.06);
  const sg2=c.createLinearGradient(0,W/2,0,W/2-0.06);sg2.addColorStop(0,'rgba(0,0,0,.35)');sg2.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=sg2;c.fillRect(-L/2,W/2-0.06,L,0.06);
  c.strokeStyle='rgba(255,255,255,.12)';c.lineWidth=0.003;c.strokeRect(-L/2,-W/2,L,W);
+ if(T.pool)drawPockets(c,T,L,W);
  // diamanti
  c.fillStyle='#f4ead2';const dy=W/2+CW+WD/2,dx=L/2+CW+WD/2,ds=0.011;
  const dia=(x,y)=>{c.beginPath();c.moveTo(x-ds,y);c.lineTo(x,y+ds*0.7);c.lineTo(x+ds,y);c.lineTo(x,y-ds*0.7);c.closePath();c.fill()};
- for(let i=1;i<8;i++){dia(-L/2+i*L/8,dy);dia(-L/2+i*L/8,-dy)}
+ for(let i=1;i<8;i++){if(T.pool&&i===4)continue;dia(-L/2+i*L/8,dy);dia(-L/2+i*L/8,-dy)}
  for(let i=1;i<4;i++){dia(dx,-W/2+i*W/4);dia(-dx,-W/2+i*W/4)}
- // punti di posizione
+ // punti di posizione (nel pool: punto di battuta in fondo e linea di battuta)
  c.fillStyle='rgba(255,255,255,.35)';
- const spots=G&&G.S.pins.length?G.S.pins.map(p=>[p.x,p.y]):[];spots.push([T.L/4,0],[-T.L/4,0]);
+ const spots=T.pool?[[T.L/4,0]]:G&&G.S.pins.length?G.S.pins.map(p=>[p.x,p.y]):[];if(!T.pool)spots.push([T.L/4,0],[-T.L/4,0]);
  for(const [x,y] of spots){c.beginPath();c.arc(x,y,0.004,0,7);c.fill()}
+ if(T.pool){c.strokeStyle='rgba(255,255,255,.16)';c.lineWidth=0.0025;c.setLineDash([0.02,0.015]);c.beginPath();c.moveTo(-L/4,-W/2);c.lineTo(-L/4,W/2);c.stroke();c.setLineDash([])}
 }
+// buche del pool: gola scura tra le punte delle sponde e foro rotondo nella sponda di legno
+function drawPockets(c,T,L,W){const g=T.cm/Math.SQRT2,sg=T.sm/2,L2=L/2,W2=W/2;
+ const hole=(x,y,r)=>{const gr=c.createRadialGradient(x,y,r*0.2,x,y,r);gr.addColorStop(0,'#000');gr.addColorStop(0.8,'#0b0b0b');gr.addColorStop(1,'#2a2622');c.fillStyle=gr;c.beginPath();c.arc(x,y,r,0,7);c.fill();
+  c.strokeStyle='rgba(200,190,170,.35)';c.lineWidth=0.004;c.beginPath();c.arc(x,y,r,0,7);c.stroke()};
+ c.fillStyle='#070707';
+ for(const sx of [-1,1])for(const sy of [-1,1]){
+  c.beginPath();c.moveTo(sx*(L2-g),sy*W2);c.lineTo(sx*(L2-g+CW*0.55),sy*(W2+CW));c.lineTo(sx*(L2+CW),sy*(W2+CW));c.lineTo(sx*(L2+CW),sy*(W2-g+CW*0.55));c.lineTo(sx*L2,sy*(W2-g));c.closePath();c.fill();
+  hole(sx*(L2+0.02),sy*(W2+0.02),T.cm*0.56)}
+ for(const sy of [-1,1]){c.beginPath();c.moveTo(-sg,sy*W2);c.lineTo(-sg+0.01,sy*(W2+CW));c.lineTo(sg-0.01,sy*(W2+CW));c.lineTo(sg,sy*W2);c.closePath();c.fill();
+  hole(0,sy*(W2+0.034),T.sm*0.5)}}
 function px(n){return n/(view.s*(G&&G.zoom||1))}
-function drawBall(c,b){const col=BALLCOL[ck(b.id)],x=b.x,y=b.y,r=b.id==='P'?BR*0.96:BR;
+// palle del pool: disegnate pixel per pixel su una piccola tela (colore, fascia delle spezzate, cerchio del numero,
+// luce), usando l'orientamento vero della palla; la tela si rifà solo quando la palla ruota o cambia lo zoom
+const pbCache={};
+function poolBallImg(b,R){const n=pnum(b.id),M=b.M,key=M.map(v=>v.toFixed(3)).join()+'|'+R;let E=pbCache[b.id];
+ if(E&&E.key===key)return E.cv;if(!E)E=pbCache[b.id]={cv:document.createElement('canvas')};E.key=key;
+ const sz=Math.ceil(R)*2+2,cv=E.cv;cv.width=cv.height=sz;const c=cv.getContext('2d'),id=c.createImageData(sz,sz),d=id.data,h=sz/2;
+ const col=n===0?[255,255,255]:hex(PCOL[n>8?n-8:n]),lx=-0.42,ly=0.48,lz=0.77;
+ for(let j=0;j<sz;j++)for(let i=0;i<sz;i++){const u=(i+0.5-h)/R,v=-(j+0.5-h)/R,r2=u*u+v*v;if(r2>1.04)continue;const w=Math.sqrt(Math.max(0,1-r2));
+  // normale nel sistema della palla (M porta dalla palla al mondo, quindi si usa la trasposta)
+  const bx=M[0]*u+M[3]*v+M[6]*w,bz=M[2]*u+M[5]*v+M[8]*w;
+  let C=col;if(n>=9&&Math.abs(bx)>0.5)C=[250,248,240];if(n>0&&Math.abs(bz)>0.86)C=[250,248,240];
+  if(n===0){const by=M[1]*u+M[4]*v+M[7]*w;for(const q of [[1,0,0],[0,1,0],[0,0,1],[-1,0,0],[0,-1,0],[0,0,-1]])if(bx*q[0]+by*q[1]+bz*q[2]>0.985){C=[200,50,40]}}
+  const dif=0.5+0.5*Math.max(0,u*lx+v*ly+w*lz),hz=u*lx*0.5+v*ly*0.5+w*(lz+1)*0.5,sp=Math.pow(Math.max(0,hz/Math.sqrt(lx*lx*0.25+ly*ly*0.25+(lz+1)*(lz+1)*0.25)),60)*0.9;
+  const k=(j*sz+i)*4;d[k]=Math.min(255,C[0]*dif+255*sp);d[k+1]=Math.min(255,C[1]*dif+255*sp);d[k+2]=Math.min(255,C[2]*dif+255*sp);d[k+3]=255*clamp((1-Math.sqrt(r2))*R+0.5,0,1)}
+ c.putImageData(id,0,0);
+ // numeri sui due cerchi bianchi
+ if(n>0)for(const s of [1,-1]){const qx=s*M[2],qy=s*M[5],qz=s*M[8];if(qz<0.3)continue;
+  c.save();c.translate(h+qx*R,h-qy*R);c.rotate(Math.atan2(M[1],M[4]));c.scale(1,qz);c.fillStyle='#111';c.font=`800 ${Math.max(6,R*(n>9?0.5:0.6))}px Figtree`;c.textAlign='center';c.textBaseline='middle';c.fillText(n,0,R*0.03);c.restore()}
+ return cv}
+function hex(s){return[parseInt(s.slice(1,3),16),parseInt(s.slice(3,5),16),parseInt(s.slice(5,7),16)]}
+function drawPoolBall(c,b){const x=b.x,y=b.y,R=clamp(BR*view.s*view.dpr*(G&&G.zoom||1),4,70);
+ c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(x+0.005,y-0.007,BR*1.04,BR*0.98,0,0,7);c.fill();
+ const im=poolBallImg(b,R),k=BR/R;c.save();c.translate(x,y);c.scale(1,-1);c.drawImage(im,-im.width/2*k,-im.height/2*k,im.width*k,im.height*k);c.restore()}
+function drawBall(c,b){if(G&&G.T.pool)return drawPoolBall(c,b);const col=BALLCOL[ck(b.id)],x=b.x,y=b.y,r=b.id==='P'?BR*0.96:BR;
  c.fillStyle='rgba(0,0,0,.35)';c.beginPath();c.ellipse(x+0.005,y-0.007,r*1.04,r*0.98,0,0,7);c.fill();
  const gr=c.createRadialGradient(x-r*0.35,y+r*0.35,r*0.1,x,y,r);gr.addColorStop(0,col[0]);gr.addColorStop(0.55,col[1]);gr.addColorStop(1,col[2]);
  c.fillStyle=gr;c.beginPath();c.arc(x,y,r,0,7);c.fill();
@@ -977,7 +1370,7 @@ function drawPins(c){const S=G.S,rv=Math.max(0.0068,px(2.6));
   gr.addColorStop(0,red?'#ff8f80':'#ffffff');gr.addColorStop(1,red?'#a5241b':(p.kind==='in'?'#c9b98f':'#bdb7a8'));c.fillStyle=gr;c.beginPath();c.arc(p.x,p.y,rv,0,7);c.fill()}}
 function pathLine(c,P,from,to,col,w,dash){if(to-from<1)return;c.strokeStyle=col;c.lineWidth=px(w);c.setLineDash(dash?[px(dash),px(dash*0.8)]:[]);c.beginPath();c.moveTo(P[from][0],P[from][1]);for(let i=from+1;i<=to;i++)c.lineTo(P[i][0],P[i][1]);c.stroke();c.setLineDash([])}
 function cutLen(P,from,len){let s=0;for(let i=from+1;i<P.length;i++){s+=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);if(s>=len)return i}return P.length-1}
-const PATHCOL0={w:'rgba(255,255,255,.9)',y:'rgba(255,220,80,.9)',r:'rgba(255,110,90,.9)',R:'rgba(255,110,90,.9)',W:'rgba(255,255,255,.9)',P:'rgba(120,180,255,.95)'};
+const PATHCOL0={c:'rgba(255,255,255,.9)',b:'rgba(255,220,120,.9)',w:'rgba(255,255,255,.9)',y:'rgba(255,220,80,.9)',r:'rgba(255,110,90,.9)',R:'rgba(255,110,90,.9)',W:'rgba(255,255,255,.9)',P:'rgba(120,180,255,.95)'};
 const PATHCOL=new Proxy(PATHCOL0,{get:(o,k)=>o[ck(String(k))]});
 function drawPred(c){const pr=G.pred;if(!pr)return;const me=meId(),P=pr.paths[me];
  if(cfg.guide===2){
@@ -985,6 +1378,7 @@ function drawPred(c){const pr=G.pred;if(!pr)return;const me=meId(),P=pr.paths[me
   pathLine(c,P,0,P.length-1,PATHCOL[me],2.2,0);
   c.lineWidth=px(1.5);for(const e of pr.end){const o=ballOf(G.S,e.id);if(!o||Math.hypot(o.x-e.x,o.y-e.y)<0.01)continue;c.strokeStyle=PATHCOL[e.id];c.setLineDash([px(3),px(3)]);c.beginPath();c.arc(e.x,e.y,BR,0,7);c.stroke();c.setLineDash([])}
   c.strokeStyle='#ff5a4a';c.lineWidth=px(2);for(const i of pr.pins){const p=G.S.pins[i];c.beginPath();c.arc(p.x,p.y,Math.max(0.012,px(7)),0,7);c.stroke()}
+  c.strokeStyle='#5dff8a';c.lineWidth=px(2.5);for(const id of pr.pots){const o=ballOf(G.S,id);if(o){c.beginPath();c.arc(o.x,o.y,BR+px(3),0,7);c.stroke()}}   // pool: palle che andranno in buca
  }else{
   if(pr.ci>=0){pathLine(c,P,0,pr.ci,PATHCOL[me],2.2,0);pathLine(c,P,pr.ci,cutLen(P,pr.ci,0.3),PATHCOL[me],1.6,5);
    const Q=pr.paths[pr.first];if(Q&&Q.length>1)pathLine(c,Q,0,cutLen(Q,0,0.35),PATHCOL[pr.first],2,5)}
@@ -1007,10 +1401,15 @@ function draw(){
  if(!G)return;const S=G.S;worldTf(ctx);
  if(G.mode==='mini'&&G.mini.target){const t=G.mini.target;for(let k=3;k>=1;k--){ctx.fillStyle=k%2?'rgba(255,215,122,.28)':'rgba(255,255,255,.18)';ctx.beginPath();ctx.arc(t.x,t.y,t.r*k/3,0,7);ctx.fill()}ctx.strokeStyle='rgba(255,215,122,.9)';ctx.lineWidth=px(2);ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.stroke()}
  if(G.phase==='place'||G.phase==='pallino'){const reg=G.phase==='pallino'?1:G.bih.region;ctx.fillStyle='rgba(255,215,122,.12)';
-  if(reg==='hand')ctx.fillRect(-S.L/2,-S.W/2,HANDZ,S.W);else ctx.fillRect(reg>0?0:-S.L/2,-S.W/2,S.L/2,S.W);
-  ctx.strokeStyle='rgba(255,215,122,.5)';ctx.lineWidth=px(2);ctx.setLineDash([px(8),px(6)]);ctx.beginPath();ctx.moveTo(0,-S.W/2);ctx.lineTo(0,S.W/2);ctx.stroke();ctx.setLineDash([])}
+  if(reg==='hand')ctx.fillRect(-S.L/2,-S.W/2,HANDZ,S.W);else if(reg==='any')ctx.fillRect(-S.L/2,-S.W/2,S.L,S.W);else if(reg==='kitchen')ctx.fillRect(-S.L/2,-S.W/2,S.L/4,S.W);else ctx.fillRect(reg>0?0:-S.L/2,-S.W/2,S.L/2,S.W);
+  const lx=reg==='kitchen'?-S.L/4:0;if(reg!=='any'){ctx.strokeStyle='rgba(255,215,122,.5)';ctx.lineWidth=px(2);ctx.setLineDash([px(8),px(6)]);ctx.beginPath();ctx.moveTo(lx,-S.W/2);ctx.lineTo(lx,S.W/2);ctx.stroke();ctx.setLineDash([])}}
  else if(G.hand){ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=px(1.5);ctx.setLineDash([px(6),px(6)]);ctx.beginPath();ctx.moveTo(0,-S.W/2);ctx.lineTo(0,S.W/2);ctx.stroke();ctx.setLineDash([])}   // boccette: linea di metà campo
  drawPins(ctx);
+ // pool: buca chiamata (e palla chiamata), buca bersaglio dei minigiochi
+ const cpk=G.pool&&G.pool.call&&['aim','power','cpuaim'].includes(G.phase)?G.pool.call:G.mode==='mini'&&G.mini.pk!=null?{pk:G.mini.pk}:null;
+ if(cpk){const [x,y]=pocketXY(cpk.pk,S.L,S.W),t=(performance.now()/600)%1;ctx.strokeStyle='rgba(255,215,122,.95)';ctx.lineWidth=px(3);ctx.setLineDash([px(6),px(4)]);
+  ctx.beginPath();ctx.arc(x,y,0.07,0,7);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle=`rgba(255,215,122,${1-t})`;ctx.beginPath();ctx.arc(x,y,0.07+t*0.05,0,7);ctx.stroke();
+  const cb=cpk.ball&&ballOf(S,cpk.ball);if(cb){ctx.strokeStyle='rgba(255,215,122,.9)';ctx.lineWidth=px(2);ctx.beginPath();ctx.arc(cb.x,cb.y,BR+px(5),0,7);ctx.stroke()}}
  const aiming=['aim','power','cpuaim'].includes(G.phase);
  if(aiming&&(G.phase==='aim'||G.phase==='power')&&cfg.guide&&G.pred)drawPred(ctx);
  for(const b of S.balls)drawBall(ctx,b);
@@ -1078,7 +1477,12 @@ $('#spClose').onclick=()=>toggleSpin(false);
 $('#btnSpinMini').onclick=()=>toggleSpin();
 
 // ---------- UI: mira, potenza ----------
-function updAng(){let d=(G.shot.ang*180/Math.PI)%360;if(d<0)d+=360;$('#angTxt').textContent=fmt(d)+'°'}
+function updAng(){let d=(G.shot.ang*180/Math.PI)%360;if(d<0)d+=360;$('#angTxt').textContent=fmt(d)+'°';if(G.pool&&curP().cpu==null){updCall();callTxt()}}
+function callTxt(){const Q=G.pool,b=$('#btnCall');if(!Q)return;b.textContent=Q.call?`📣 ${pnum(Q.call.ball)}`:'📣';hud()}
+$('#btnCall').onclick=()=>{const Q=G.pool;if(!Q||!Q.call)return;const ids=G.S.balls.filter(b=>b.id!=='c').map(b=>b.id).sort((a,b)=>pnum(a)-pnum(b));
+ Q.call.ball=ids[(ids.indexOf(Q.call.ball)+1)%ids.length];Q.callMan=true;Q.pkMan=false;updCall();callTxt();toast(`Palla chiamata: la ${pnum(Q.call.ball)} · tocca una buca sul tavolo per chiamarla`,'gold')};
+$('#btnPush').onclick=()=>{const Q=G.pool;if(!Q||!Q.push)return;Q.pushNow=!Q.pushNow;$('#btnPush').classList.toggle('sel',Q.pushNow);
+ if(Q.pushNow)toast('Push out: non devi colpire la palla più bassa né andare in sponda. Poi l\'avversario sceglie se tirare o ripassarti il tiro','gold');updCall();setPhase('aim')};
 function rotAim(deg){G.shot.ang+=deg*Math.PI/180;G.predDirty=true;updAng()}
 const GUIDE_TXT=['Guida: no','Guida: base','Guida: tutta'];
 function guideBtn(){$('#btnGuide').textContent=GUIDE_TXT[cfg.guide];$('#btnGuide').classList.toggle('sel',cfg.guide>0)}
@@ -1098,6 +1502,8 @@ function tri(t){const per=2.0,x=(t%per)/per;return x<0.5?x*2:2-x*2}
 // tavolo: mira trascinando, palla in mano
 let drag=null;
 cv.addEventListener('pointerdown',e=>{if(!G)return;ac();const r=cv.getBoundingClientRect(),[x,y]=toWorld(e.clientX-r.left,e.clientY-r.top);
+ if(G.phase==='aim'&&G.pool&&G.pool.call){   // pool: toccando una buca la si chiama
+  for(let i=0;i<6;i++){const [px2,py2]=pocketXY(i,G.S.L,G.S.W);if(Math.hypot(x-px2,y-py2)<0.09){G.pool.call.pk=i;G.pool.pkMan=true;callTxt();sfx.cush(1);return}}}
  if(G.phase==='aim'){drag='aim';cv.setPointerCapture(e.pointerId);aimAt(x,y)}
  else if(G.phase==='place'||G.phase==='pallino'){drag='place';cv.setPointerCapture(e.pointerId);placeAt(x,y)}
  else if(G.phase==='power'){G.shot.p=G.pw;shoot()}});
@@ -1106,7 +1512,7 @@ for(const ev of ['pointerup','pointercancel'])cv.addEventListener(ev,()=>drag=nu
 function aimAt(x,y){const b=ballOf(G.S,meId());if(Math.hypot(x-b.x,y-b.y)<BR*1.2)return;G.shot.ang=Math.atan2(y-b.y,x-b.x)-squirt(G.shot);G.predDirty=true;updAng()}
 function placeAt(x,y){const S=G.S,pal=G.phase==='pallino',b=ballOf(S,pal?'P':meId()),reg=pal?1:G.bih.region;
  x=clamp(x,-S.L/2+BR,S.L/2-BR);y=clamp(y,-S.W/2+BR,S.W/2-BR);
- if(reg==='hand')x=Math.min(x,-S.L/2+HANDZ);else if(x*reg<BR)x=reg*BR;
+ if(reg==='hand')x=Math.min(x,-S.L/2+HANDZ);else if(reg==='kitchen')x=Math.min(x,-S.L/4);else if(typeof reg==='number'&&x*reg<BR)x=reg*BR;
  if(validSpot(x,y,reg,b.id)){b.x=x;b.y=y;if(!pal)G.shot.ang=aimToward()}}
 
 document.addEventListener('keydown',e=>{if(!G||!$('#ovMenu').hidden||!$('#ovMsg').hidden)return;const k=e.key,ph=G.phase;
@@ -1125,12 +1531,19 @@ function hud(){if(!G)return;const pc=[$('#pc0'),$('#pc1')];
  if(G.mode==='mini'){const M=G.mini,p=G.players[0];pc[1].hidden=true;pc[0].hidden=false;pc[0].classList.add('on');
   pc[0].querySelector('.dot').style.background=BALLCOL[p.ball][1];pc[0].querySelector('.nm').textContent=p.name;pc[0].querySelector('.tg').textContent='tentativo';pc[0].querySelector('.sc').textContent=`${Math.min(M.used+1,M.tries||1)}/${M.tries||'-'}`;
   $('#hmid').innerHTML=`<b>${M.def.emo} ${M.def.name}</b> · livello ${M.lv+1}<br>${goalTxt()}`;return}
+ const Q=G.pool;
  G.players.forEach((p,i)=>{const e=pc[i];e.hidden=false;e.classList.toggle('on',i===G.cur);e.querySelector('.dot').style.background=BALLCOL[p.ball][1];
   e.querySelector('.nm').textContent=(p.emo?p.emo+' ':p.cpu!=null?'🤖 ':'')+p.name;
-  e.querySelector('.tg').textContent=G.hand&&p.left!=null?'●'.repeat(p.left)+'○'.repeat(4-p.left):'';e.querySelector('.sc').textContent=p.score});
+  let tg=G.hand&&p.left!=null?'●'.repeat(p.left)+'○'.repeat(4-p.left):'';
+  if(Q){const gp=Q.grp&&Q.grp[i];if(gp){const n=G.S.balls.filter(b=>grpOf(b.id)===gp).length;tg=`${GRPN[gp]} · ${n?n+' da fare':'tocca alla 8'}`;
+    e.querySelector('.dot').style.background=gp==='s'?PCOL[1]:`linear-gradient(#fff 30%,${PCOL[3]} 30%,${PCOL[3]} 70%,#fff 70%)`}
+   else if(Q.fouls&&Q.fouls[i])tg=`${Q.fouls[i]} fall${Q.fouls[i]>1?'i':'o'} di fila`}
+  e.querySelector('.tg').textContent=tg;e.querySelector('.sc').textContent=p.score});
  const gn=GAMES[G.game].name+(G.vr&&G.vr!=='classica'?` (${GORVAR[G.vr]})`:'')+(G.bb?` · giocata ${G.bb.giocata}`:'');
- const ph=G.hand&&G.phase==='aim'?'Direzione del lancio':G.hand&&G.phase==='place'?'Punto di lancio':PHASE_TXT[G.phase]||'';
- $('#hmid').innerHTML=`<b>${gn}</b>${G.mode==='story'?' · '+hearts():''} · ai ${G.target} punti${G.sets>1?` · set ${G.setNo} (${G.won[0]}–${G.won[1]})`:''} · ${TABLES[G.table].name} · ${cfg.temp} °C<br>${ph}`}
+ const ph=G.hand&&G.phase==='aim'?'Direzione del lancio':G.hand&&G.phase==='place'?'Punto di lancio':G.pool&&G.pool.brk&&G.phase==='aim'?'Spaccata: mira al triangolo':PHASE_TXT[G.phase]||'';
+ const goal=Q?`corsa a ${G.target} · partita ${Q.rack||1}${Q.grp&&!Q.grp[0]&&!Q.brk&&G.game==='otto'?' · tavolo aperto':''}`:`ai ${G.target} punti`;
+ const call=Q&&Q.call&&['aim','power','cpuaim'].includes(G.phase)?` · 📣 ${G.game==='otto'?'la 8':'la '+pnum(Q.call.ball)} nella buca segnata`:Q&&Q.pushNow?' · push out':'';
+ $('#hmid').innerHTML=`<b>${gn}</b>${G.mode==='story'?' · '+hearts():''} · ${goal}${G.sets>1?` · set ${G.setNo} (${G.won[0]}–${G.won[1]})`:''} · ${TABLES[G.table].name} · ${cfg.temp} °C<br>${ph}${call}`}
 const PHASE_TXT={pallino:'Posiziona il pallino',place:'Palla in mano',aim:'Direzione del tiro · tocca la pallina in basso per l\'effetto',power:'Ferma la barra della potenza',roll:'',cpu:'Il computer pensa',cpuaim:'Il computer tira'};
 function toast(t,cls){if(!t)return;const e=document.createElement('div');e.className='tst '+(cls||'');e.textContent=t;const box=$('#toast');box.appendChild(e);while(box.children.length>3)box.firstChild.remove();setTimeout(()=>e.remove(),2800)}
 function card(title,html,btns,wide){$('#msgT').textContent=title;$('#msgB').innerHTML=html;const bx=$('#msgBtns');bx.innerHTML='';
@@ -1143,32 +1556,38 @@ let menuMode=cfg.mode;
 function seg(id,val,fn){const el=$(id);el.querySelectorAll('.btn').forEach(b=>{b.classList.toggle('sel',b.dataset.v==String(val));b.onclick=()=>{fn(b.dataset.v);renderMenu()}})}
 function renderMenu(){
  $$('#modeTabs .btn').forEach(b=>{b.classList.toggle('sel',b.dataset.m===menuMode);b.onclick=()=>{menuMode=b.dataset.m;if(menuMode!=='story'&&menuMode!=='mini'){cfg.mode=menuMode;saveCfg()}renderMenu()}});
+ const wd=world(),pool=wd==='pool',gm=cfg[GK()];
+ $$('#worldTabs .btn').forEach(b=>{b.classList.toggle('sel',b.dataset.w===wd);b.onclick=()=>{if(world()===b.dataset.w)return;cfg.world=b.dataset.w;saveCfg();loadStory();if(!G)layout();renderMenu()}});
+ $('#menuSub').textContent=pool?'Pool: palla 8, palla 9 e palla 10, con le regole WPA':'Biliardo all\'italiana e alla goriziana';
  $('#mSetup').hidden=!(menuMode==='2p'||menuMode==='cpu');$('#mStory').hidden=menuMode!=='story';$('#mMini').hidden=menuMode!=='mini';
- $('#segGame').innerHTML=Object.entries(GAMES).map(([k,g])=>`<button class="btn" data-v="${k}">${g.name} · ${g.sub}</button>`).join('');
- seg('#segGame',cfg.game,v=>{cfg.game=v;saveCfg()});
- $('#grpGorVar').hidden=cfg.game!=='goriziana';
+ $('#segGame').innerHTML=Object.entries(GAMES).filter(([k])=>gWorld(k)===wd).map(([k,g])=>`<button class="btn" data-v="${k}">${g.name} · ${g.sub}</button>`).join('');
+ seg('#segGame',gm,v=>{cfg[GK()]=v;saveCfg()});
+ $('#grpGorVar').hidden=gm!=='goriziana';
  $('#segGorVar').innerHTML=Object.entries(GORVAR).map(([k,n])=>`<button class="btn" data-v="${k}">${n}</button>`).join('');
  seg('#segGorVar',cfg.gorVar,v=>{cfg.gorVar=v;saveCfg()});
- $('#segTarget').innerHTML=GAMES[cfg.game].targets.map(t=>`<button class="btn" data-v="${t}">${t}</button>`).join('');
- seg('#segTarget',cfg.target[cfg.game],v=>{cfg.target[cfg.game]=+v;saveCfg()});
+ $('#lblTarget').textContent=pool?'Partite da vincere (si gioca «alla corsa»: vince chi arriva prima)':'Punti per vincere';
+ $('#segTarget').innerHTML=GAMES[gm].targets.map(t=>`<button class="btn" data-v="${t}">${t}</button>`).join('');
+ seg('#segTarget',cfg.target[gm],v=>{cfg.target[gm]=+v;saveCfg()});
+ $('#grpSets').hidden=pool;
  seg('#segSets',cfg.sets,v=>{cfg.sets=+v;saveCfg()});
  seg('#segDiff',cfg.diff,v=>{cfg.diff=+v;saveCfg()});$('#grpDiff').hidden=menuMode!=='cpu';
  $('#nm0').value=cfg.names[0];$('#nm1').value=cfg.names[1];$('#nm1').hidden=menuMode!=='2p';
- $('#tabTables').innerHTML=Object.entries(TABLES).map(([k,t])=>`<button class="btn tcard${k===cfg.table?' sel':''}" data-k="${k}"><span class="sw" style="background:${t.cloth};border-color:${t.wood2}"></span><span>${t.name}<small>${t.sub}</small></span></button>`).join('');
+ $('#tabTables').innerHTML=Object.entries(TABLES).filter(([k,t])=>!!t.pool===pool).map(([k,t])=>`<button class="btn tcard${k===cfg[TK()]?' sel':''}" data-k="${k}"><span class="sw" style="background:${t.cloth};border-color:${t.wood2}"></span><span>${t.name}<small>${t.sub}</small></span></button>`).join('');
  $('#tabCtx').innerHTML=Object.entries(CTXS).map(([k,t])=>`<button class="btn tcard${k===cfg.ctx?' sel':''}" data-k="${k}"><span>${t.name}<small>${t.sub}</small></span></button>`).join('');
- $$('#tabTables .btn').forEach(b=>b.onclick=()=>{cfg.table=b.dataset.k;saveCfg();renderMenu()});
+ $$('#tabTables .btn').forEach(b=>b.onclick=()=>{cfg[TK()]=b.dataset.k;saveCfg();if(!G)layout();renderMenu()});
  $$('#tabCtx .btn').forEach(b=>b.onclick=()=>{cfg.ctx=b.dataset.k;saveCfg();renderMenu()});
  $('#temp').value=cfg.temp;tempInfo();
  seg('#segGuide',cfg.guide,v=>{cfg.guide=+v;saveCfg()});
  seg('#segSound',cfg.sound,v=>{cfg.sound=+v;saveCfg()});
  seg('#segSlow',cfg.slowmo,v=>{cfg.slowmo=+v;saveCfg()});
  seg('#segMiniLv',cfg.miniLv,v=>{cfg.miniLv=+v;saveCfg()});
- $('#miniList').innerHTML=MINIS.map((m,i)=>`<button class="btn" data-i="${i}">${m.emo} ${m.name}<small>${m.desc}</small></button>`).join('');
- $$('#miniList .btn').forEach(b=>b.onclick=()=>newMini(MINIS[+b.dataset.i],cfg.miniLv,false));
- // storia
- let h='';STORY.forEach((C,ci)=>{const lock=ci>story.c;h+=`<div class="circ${lock?' lock':''}"><h4>${lock?'🔒':ci<story.c?'✅':'▶️'} ${C.name}</h4><div class="opps">${C.opps.map((o,oi)=>{const done=ci<story.c||(ci===story.c&&oi<story.o);const nx=ci===story.c&&oi===story.o;return`<span class="opp${done?' done':''}${nx?' next':''}">${o.emo} ${o.name} · ${GAMES[o.game].name.toLowerCase()} ${o.target}</span>`}).join('')}</div></div>`});
- h=`<p class="sub">Vite: <b>${hearts()}</b> · ogni sconfitta ne toglie una; senza vite si ricomincia dal primo circuito.</p>`+h;
- if(story.done)h=`<p class="sub">🏆 Hai già vinto il Gran Premio! Puoi rigiocare la storia da capo.</p>`+h;
+ const MS=MINIS_OF();
+ $('#miniList').innerHTML=MS.map((m,i)=>`<button class="btn" data-i="${i}">${m.emo} ${m.name}<small>${m.desc}</small></button>`).join('');
+ $$('#miniList .btn').forEach(b=>b.onclick=()=>newMini(MS[+b.dataset.i],cfg.miniLv,false));
+ // storia (ognuno dei due mondi ha la sua)
+ let h='';SC().forEach((C,ci)=>{const lock=ci>story.c;h+=`<div class="circ${lock?' lock':''}"><h4>${lock?'🔒':ci<story.c?'✅':'▶️'} ${C.name}</h4><div class="opps">${C.opps.map((o,oi)=>{const done=ci<story.c||(ci===story.c&&oi<story.o);const nx=ci===story.c&&oi===story.o;return`<span class="opp${done?' done':''}${nx?' next':''}">${o.emo} ${o.name} · ${GAMES[o.game].name.toLowerCase()} ${pool?'a '+o.target:o.target}</span>`}).join('')}</div></div>`});
+ h=`<p class="sub">${pool?'Storia del pool · ':''}Vite: <b>${hearts()}</b> · ogni sconfitta ne toglie una; senza vite si ricomincia dal primo circuito.</p>`+h;
+ if(story.done)h=`<p class="sub">🏆 Hai già vinto ${pool?'il Campionato del Mondo':'il Gran Premio'}! Puoi rigiocare la storia da capo.</p>`+h;
  h+=`<div class="mbtns"><button class="btn" id="stReset">Ricomincia la storia</button></div>`;
  $('#mStory').innerHTML=h;$('#stReset').onclick=()=>{if(confirm('Ricominciare la storia dall\'inizio?')){story=newStory(story.done);saveStory();renderMenu()}};
  $('#btnPlay').textContent=menuMode==='story'?(story.stage==='mini'?'Gioca la sfida ▸':'Gioca il prossimo incontro ▸'):menuMode==='mini'?'Scegli una sfida qui sopra':'Gioca';
@@ -1189,12 +1608,12 @@ $('#btnPlay').onclick=()=>{ac();
  if(menuMode==='story'){if(story.stage==='mini')storyMini();else storyMatch();return}
  if(menuMode==='mini')return;
  const pl=[{name:cfg.names[0],ball:'w',score:0,cpu:null},menuMode==='cpu'?{name:['Principiante','Dilettante','Esperto','Campione'][cfg.diff]+' CPU',ball:'y',score:0,cpu:cfg.diff}:{name:cfg.names[1],ball:'y',score:0,cpu:null}];
- newMatch({mode:menuMode,game:cfg.game,vr:cfg.gorVar,target:cfg.target[cfg.game]||GAMES[cfg.game].targets[1],table:cfg.table,ctx:cfg.ctx,players:pl,starter:0,sets:cfg.sets})};
+ const gm=cfg[GK()];newMatch({mode:menuMode,game:gm,vr:cfg.gorVar,target:cfg.target[gm]||GAMES[gm].targets[1],table:cfg[TK()],ctx:cfg.ctx,players:pl,starter:0,sets:cfg.sets})};
 $('#btnRules').onclick=()=>card('Regole e comandi',`<div class="rules">
  <h3>Come si tira</h3><ul><li><b>Effetto (facoltativo)</b>: tocca la pallina in basso a sinistra per aprire il pannello laterale; tocca la palla nel punto dove vuoi colpirla (alto = seguito, basso = rinculo, lati = effetto) e scegli l'inclinazione della stecca. Oltre 35° la palla curva (massé). Tastiera: I J K L e W/S, E apre e chiude.</li>
  <li><b>Direzione</b>: trascina sul tavolo o usa ↺ ↻ (tieni premuto per accelerare). Tastiera: frecce, Maiusc per la regolazione fine.</li>
  <li><b>Potenza</b>: la barra sale e scende, tocca «Colpisci!» (o il tavolo, o la barra spaziatrice) per fermarla.</li>
- <li><b>Colpo guidato</b>: «base» mostra il percorso fino al primo contatto, sponde ed effetto compresi; «tutta» simula tutte le palle e i birilli che cadranno.</li></ul>
+ <li><b>Colpo guidato</b>: «base» mostra il percorso fino al primo contatto, sponde ed effetto compresi; «tutta» simula tutte le palle e i birilli che cadranno (nel pool cerchia di verde le palle che andranno in buca).</li></ul>
  <h3>All'italiana (5 birilli)</h3><ul><li>Con la tua palla devi colpire per prima la palla avversaria; i punti li fanno la palla avversaria e il pallino.</li>
  <li>Birillo bianco 2 · birillo rosso 4 se cade con altri, <b>10 da solo</b>.</li><li>Avversaria sul pallino (casin) 3 · tua palla sul pallino dopo l'avversaria (carambola) 4.</li>
  <li>Falli (2 punti + birilli all'avversario e palla in mano): mancare la palla avversaria, toccare prima il pallino o i birilli. Se la tua palla abbatte birilli dopo l'avversaria, i punti vanno all'avversario.</li></ul>
@@ -1220,6 +1639,22 @@ $('#btnRules').onclick=()=>card('Regole e comandi',`<div class="rules">
   <li>i birilli li abbatte una tua boccia, anche quella appena lanciata dopo aver colpito qualcosa.</li></ul>
   Nel tiro doppio anche i punti bevuti valgono doppio.</li>
  <li>Tiri irregolari: colpire di diretto i birilli, o una boccia o il pallino che non hanno superato la metà campo. La boccia viene annullata, si rimette tutto com'era e i birilli vanno all'avversario.</li></ul>
+ <h3>🎱 Pool: regole comuni (WPA)</h3><ul><li>Tavolo con 6 buche, una bianca e palle numerate. Si gioca alla <b>corsa</b>: vince chi vince per primo il numero di partite scelto. Si spacca a turno.</li>
+ <li><b>Spaccata</b>: la bianca si mette dietro la <b>linea di battuta</b> (la linea tratteggiata). È valida se va in buca almeno una palla o se almeno 4 palle toccano una sponda.</li>
+ <li><b>Tiro valido</b>: la bianca deve colpire per prima la palla giusta, e dopo il contatto una palla deve andare in buca o una palla qualsiasi (anche la bianca) deve toccare una sponda. Se mandi in buca una palla valida, tiri ancora.</li>
+ <li><b>Falli</b>: bianca in buca, nessuna palla colpita, prima palla sbagliata, nessuna sponda dopo il contatto. L'avversario ha <b>palla in mano</b>: mette la bianca dove vuole.</li>
+ <li><b>Chiamata</b>: quando serve, il gioco propone una buca (cerchio giallo); tocca un'altra buca sul tavolo per cambiarla.</li></ul>
+ <h3>Palla 8</h3><ul><li>Palle <b>piene</b> (1-7) e <b>spezzate</b> (9-15). Dopo la spaccata il tavolo è «aperto»: la prima palla che mandi in buca decide il tuo gruppo. A tavolo aperto non puoi colpire per prima la 8.</li>
+ <li>Devi sempre colpire per prima una palla del tuo gruppo. Finito il gruppo, tiri la <b>8 chiamando la buca</b>: se entra lì, hai vinto.</li>
+ <li><b>Perdi la partita</b> se mandi in buca la 8 prima di aver finito le tue palle, in una buca diversa da quella chiamata, oppure con un fallo (per esempio insieme alla bianca).</li>
+ <li>La 8 in buca sulla spaccata torna sul punto e chi ha spaccato continua. Se la spaccata non è valida, l'avversario sceglie: giocare da lì o rifare il triangolo. Con la bianca in buca sulla spaccata, l'avversario ha palla in mano dietro la linea e non può colpire per prima una palla dietro la linea.</li></ul>
+ <h3>Palla 9</h3><ul><li>Nove palle a rombo, la 1 in testa e la 9 al centro. Si deve colpire sempre per prima la <b>palla più bassa</b> rimasta sul tavolo; qualsiasi palla vada in buca, si continua.</li>
+ <li><b>Vince chi manda in buca la 9</b> con un tiro valido, anche di combinazione o sulla spaccata. La 9 entrata con un fallo torna sul punto.</li>
+ <li><b>Push out</b>: subito dopo la spaccata chi tira può dichiarare il push out e spostare la bianca dove vuole, senza dover colpire la palla più bassa. Poi l'avversario sceglie se tirare o ripassare il tiro.</li>
+ <li><b>Tre falli di fila</b> fanno perdere la partita (al secondo arriva un avviso).</li></ul>
+ <h3>Palla 10</h3><ul><li>Dieci palle a triangolo, la 1 in testa e la 10 al centro. Come la palla 9, ma ogni tiro va <b>chiamato</b>: palla e buca (pulsante 📣 per cambiare palla, tocca la buca sul tavolo).</li>
+ <li>Conta solo la palla chiamata nella buca chiamata. Se entra un'altra palla, resta in buca ma il turno passa e l'avversario sceglie se tirare o far tirare di nuovo te.</li>
+ <li>Vince chi manda la <b>10 nella buca chiamata</b>. La 10 entrata sulla spaccata o senza chiamata torna sul punto. Valgono il push out e i tre falli di fila.</li></ul>
  <h3>Temperatura del tavolo</h3><ul><li>Standard 30 °C (tavolo riscaldato). Più caldo: panno più veloce e sponde più vive; più freddo: il contrario.</li></ul>
  <h3>Rallentatore</h3><ul><li>Quando una palla sta per arrivare sul birillo rosso (o lo sfiora) il tiro rallenta e l'inquadratura si avvicina. Si spegne dal menu; «⏩ Veloce» lo salta.</li></ul></div>`,[{t:'Chiudi',cls:'pri'}]);
 
@@ -1249,6 +1684,12 @@ const HISTORY=`<div class="rules hist">
  <p>La <b>goriziana</b> prende il nome da <b>Gorizia</b>, in Friuli-Venezia Giulia, dove si sarebbe diffusa prima di conquistare i bar di tutta Italia. Al posto di cinque birilli ce ne sono nove, i punteggi sono molto più alti (il birillo rosso da solo vale 30!) e i tiri di sponda valgono doppio. Nei bar si gioca spesso il «filotto»: abbattere cinque birilli in fila è il sogno di ogni giocatore, tanto che la parola è entrata nella lingua di tutti i giorni per dire «una serie di successi uno dopo l'altro».</p>
  <h3>🖐️ Le boccette</h3>
  <p>Le <b>boccette</b> sono un'invenzione tutta italiana, amatissima in <b>Emilia-Romagna</b> e in Romagna in particolare: sono le bocce da giardino portate sul tavolo da biliardo. Niente stecca, si lancia a mano dalla sponda corta: quattro bocce rosse, quattro bianche e un pallino. Nelle osterie e nei bar di paese le sfide a boccette, spesso a coppie, duravano intere serate, con il pubblico a commentare ogni accosto.</p>
+ <h3>🎱 Il pool: il biliardo con le buche</h3>
+ <p>Il biliardo con le buche viene dall'Inghilterra, dove già nel Settecento si giocava sui tavoli con sei buche. In America prese il nome di <b>pool</b>: le sale dove si giocava, le <i>poolrooms</i>, erano anche i posti dove si scommetteva sulle corse dei cavalli mettendo i soldi in un «piatto» comune, il <i>pool</i>. Il nome è rimasto al gioco.</p>
+ <p>La <b>palla 8</b> nasce negli Stati Uniti all'inizio del Novecento ed è oggi il gioco da bar più diffuso al mondo. La <b>palla 9</b>, più veloce e spettacolare, si diffonde dagli anni Venti e diventa il gioco dei professionisti; la <b>palla 10</b> è più recente e obbliga a chiamare ogni tiro, così conta meno la fortuna.</p>
+ <ul><li>Nel 1954 l'americano <b>Willie Mosconi</b> mandò in buca <b>526 palle di fila</b> a «pool continuo» in un'esibizione: un record rimasto imbattuto per decenni.</li>
+ <li>Il film <i>Lo spaccone</i> (1961), con Paul Newman, fece riempire le sale da biliardo di tutta l'America; venticinque anni dopo il seguito, <i>Il colore dei soldi</i> con Tom Cruise, rese famosa nel mondo la palla 9.</li>
+ <li>Si racconta che molti giocatori da sala, i famosi <i>hustler</i>, fingessero di giocare male per alzare la posta, e poi vincessero tutto all'ultima partita.</li></ul>
  <h3>💬 Il biliardo nella lingua</h3>
  <ul><li><b>Di sponda</b>: fare qualcosa in modo indiretto, passando da qualcun altro («gli ha risposto di sponda»).</li>
  <li><b>Filotto</b>: una serie di vittorie una dopo l'altra.</li>
@@ -1262,7 +1703,7 @@ function update(dt,now){if(!G||!$('#ovMenu').hidden)return;const S=G.S;
  for(const p of S.pins)if(p.down&&p.fall<1)p.fall=Math.min(1,p.fall+dt*5);
  // rallentatore e zoom: si attivano nella finestra di tempo calcolata da cineWindow
  const cw=G.cine,inW=G.phase==='roll'&&cw&&!G.fast&&S.t>=cw.t0&&S.t<=cw.t1;
- if(inW&&!cw.said){cw.said=true;toast(cw.hit?'🎯 Sul birillo rosso…':'Sfiora il birillo rosso…','gold')}
+ if(inW&&!cw.said){cw.said=true;toast(cw.txt||(cw.hit?'🎯 Sul birillo rosso…':'Sfiora il birillo rosso…'),'gold')}
  G.ts=(G.ts||1)+((inW?0.28:1)-(G.ts||1))*Math.min(1,dt*6);
  G.zoom=(G.zoom||1)+((inW?cw.z:1)-(G.zoom||1))*Math.min(1,dt*(inW?3:2.2));if(Math.abs(G.zoom-1)<0.002)G.zoom=1;
  if(cw)G.focus=[cw.fx,cw.fy];

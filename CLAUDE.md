@@ -1,6 +1,6 @@
 # Stecca d'Oro — biliardo all'italiana, goriziana, carambola e boccette
 
-Specialità: all'italiana (5 birilli), goriziana (9 birilli, con varianti classica/tutti doppi/filotto), tre sponde, carambola libera, boccette (a mano). Gioco di biliardo in italiano, tutto in un unico file: `index.html` (HTML, CSS e JavaScript inline, nessuna build, nessuna dipendenza oltre ai Google Fonts). Da pubblicare su GitHub Pages: il file deve chiamarsi `index.html` e stare nella radice del repository.
+Specialità: all'italiana (5 birilli), goriziana (9 birilli, con varianti classica/tutti doppi/filotto), tre sponde, carambola libera, boccette (a mano). In più il **pool** (tavolo con 6 buche, regole WPA): palla 8, palla 9, palla 10, con storia e minigiochi suoi. Nel menu si sceglie il «mondo» (`cfg.world`: `it` o `pool`); ogni mondo ricorda specialità (`cfg.game` / `cfg.pgame`) e tavolo (`cfg.table` / `cfg.ptable`), helper `GK()` e `TK()`. Gioco di biliardo in italiano, tutto in un unico file: `index.html` (HTML, CSS e JavaScript inline, nessuna build, nessuna dipendenza oltre ai Google Fonts). Da pubblicare su GitHub Pages: il file deve chiamarsi `index.html` e stare nella radice del repository.
 
 Il gioco deve funzionare bene su PC, smartphone (verticale e orizzontale) e LIM (lavagna interattiva, schermi da 1920×1080 in su). Ogni modifica va verificata su tutti e tre.
 
@@ -11,7 +11,7 @@ Il gioco deve funzionare bene su PC, smartphone (verticale e orizzontale) e LIM 
 - **Il tavolo deve restare sempre visibile.** Il pannello dell'effetto (visuale sulla palla e inclinazione della stecca) è facoltativo e sta a lato (in basso sui telefoni); quando è aperto il tavolo si restringe. Non rimetterlo al centro dello schermo: l'utente l'ha bocciato.
 - **Il colpo guidato parte spento** e si attiva solo se il giocatore lo sceglie (pulsante «Guida» o menu).
 - **Credibilità fisica**: un birillo deve deviare appena la bilia (toglie solo il 5% della velocità verso di sé: pesa pochi grammi). Le bilie devono scorrere a lungo e arrivare piano sul castello: non alzare la resistenza al rotolamento (`mur` ≈ 0,0075 a 30 °C).
-- **Rallentatore** solo quando una palla si avvicina al **birillo rosso**, non a tutto il castello.
+- **Rallentatore** solo quando una palla si avvicina al **birillo rosso**, non a tutto il castello (nel pool: solo la palla decisiva vicino a una buca).
 - **Storia con 3 vite**: ogni sconfitta (o incontro abbandonato tornando al menu) toglie una vita; a zero si ricomincia dal primo circuito. Non rendere la storia ripetibile all'infinito.
 - Le regole seguono i regolamenti reali (FIBiS): prima di inventarne, verificarle. Gli aneddoti della «Storia del biliardo» incerti vanno presentati con «si dice / si racconta».
 - Dopo ogni modifica l'utente ricarica `index.html` su GitHub: ricordaglielo.
@@ -52,6 +52,19 @@ Dentro, in ordine:
 - **Interfaccia**: pannello effetto (`drawSpinUI`, `setHit`, `toggleSpin`), mira (`rotAim`, trascinamento sul tavolo), tastiera, `hud`, `toast`, `card`, menu (`renderMenu`).
 - **Storia del biliardo**: testo `HISTORY` aperto dal pulsante del menu `#btnHist` con `card(..., wide)`.
 - **Ciclo**: `update(dt, now)` e `frame`. **Avvio**: `start()`.
+
+### Pool (biliardo con le buche)
+- **Palla**: `BR` non è più costante: `setBR(T)` la mette a 57,15 mm sui tavoli da pool (`T.pool`) e a 61,5 mm sugli altri. `newMatch` e `newMini` la chiamano sempre.
+- **Tavoli** `p9`, `p8`, `p7`, `pnero` in `TABLES` con `pool:1`, `cm`/`sm` = bocca delle buche d'angolo e centrali. `mkState(L,W,P,T)` mette in `S.pk` i dati delle buche (`cloneS` li copia).
+- **Fisica delle buche** (`poolCush`, chiamata da `cushions`): sponde dritte interrotte dalle bocche, punte delle sponde come punti su cui rimbalzare, palla in buca quando il centro supera la bocca (`b.pot`); `step` la toglie da `S.balls` e registra l'evento `{k:'k', a, pk}`. Buche numerate 0-5 (`pocketXY`, `pocketAim`). Le buche centrali respingono i tiri troppo radenti.
+- **Palle**: ids `c` (bianca), `b1`…`b15`; `pnum(id)`, `grpOf(id)` ('s' piene, 't' spezzate). Disegnate pixel per pixel con l'orientamento vero (`poolBallImg`, cache in `pbCache`), numeri compresi.
+- **Regole** `evalPool(gm, ev, pre)` (WPA): spaccata valida = una palla in buca o 4 in sponda; tiro valido = prima palla giusta, poi buca o sponda; falli → palla in mano ovunque (`G.bih.region='any'`; dopo la bianca in buca sulla spaccata della palla 8: `'kitchen'`, dietro la linea di battuta a x = −L/4, e non si può colpire per prima una palla dietro la linea). Palla 8: tavolo aperto (non si colpisce per prima la 8), gruppo alla prima palla in buca, 8 con buca chiamata; si perde con la 8 in anticipo, in buca sbagliata o con fallo; 8 sulla spaccata torna sul punto. Palla 9: dalla più bassa, 9 vince (anche sulla spaccata), push out dopo la spaccata, tre falli di fila perdono. Palla 10: come la 9 ma con chiamata di palla e buca; la 10 non chiamata o sulla spaccata torna sul punto (`spotBall`); chiamata sbagliata → opzione all'avversario. Le scelte dell'avversario (push out, chiamata sbagliata, spaccata non valida) sono in `poolOption` (il computer tira sempre).
+- **Flusso**: `G.pool` (rack, brk, grp, fouls, push, pushNow, call, callMan/pkMan, bihK, pre). `startRack` (triangolo con le regole di disposizione, spacca a turno), `poolPre` (situazione a inizio tiro, salvata in `shoot`), `poolAfter`, `rackEnd` (corsa a `G.target` partite, poi `endMatch`). Chiamata: `needCall`, `updCall` (buca automatica più in linea, si cambia toccando una buca; 📣 cambia palla nella palla 10).
+- **Computer**: `cpuPool` (spaccata a piena potenza; con palla in mano sceglie la posizione; candidati palla fantasma × buca × potenze × effetti, più difese), `aiPoolValue` simula e valuta con `evalPool` e la facilità del tiro successivo (`potEase`, `bestEase`). Livelli in `POOL_AI`.
+- **Storia del pool** `STORY_POOL` (5 circuiti, partite «alla corsa»), salvata a parte in `localStorage` `sd-pstory`. `SC()` = storia del mondo attuale, `loadStory()`, `useWorld(G.world)` riporta al mondo dell'incontro. Premio della sfida: spacchi tu la prima partita (`story.bonus` 1; −1 se la sfida fallisce: spacca l'avversario).
+- **Minigiochi del pool** `MINIS_POOL` (buca chiamata, spaccata, di sponda, combinazione, posizione, in fila), `MINIS_OF()`. Le sfide a più tiri restituiscono `{keep:true}` e si continua dalla posizione raggiunta. Tutte risolvibili al livello 5 (verificato a forza bruta).
+- **Rallentatore**: nel pool `cinePool` scatta quando la palla decisiva (8, 9 o 10) passa vicino a una buca.
+- Ambienti aggiunti: `pub` (pub irlandese) e `neon` (sala giochi).
 
 ## Insidie note
 
